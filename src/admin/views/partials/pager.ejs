@@ -1,0 +1,23 @@
+<%# Pagination bar. Expects `pager` from lib.paginate() and optional `noun` forms for the counter. %>
+<% if (pager.total > 0) {
+  const _pages = [];
+  for (let n = 1; n <= pager.pages; n += 1) {
+    if (n === 1 || n === pager.pages || Math.abs(n - pager.page) <= 2) _pages.push(n);
+    else if (_pages[_pages.length - 1] !== '…') _pages.push('…');
+  }
+%>
+<div class="pager">
+  <span>Показано <%= pager.from %>–<%= pager.to %> из <%= formatNumber(pager.total) %></span>
+  <% if (pager.pages > 1) { %>
+    <nav class="pager__pages" aria-label="Страницы">
+      <% if (pager.page > 1) { %><a href="<%= pager.link(pager.page - 1) %>" rel="prev" aria-label="Предыдущая страница"><%- icon('left', 15) %></a><% } else { %><span class="is-disabled"><%- icon('left', 15) %></span><% } %>
+      <% _pages.forEach((n) => { %>
+        <% if (n === '…') { %><span class="is-disabled">…</span>
+        <% } else if (n === pager.page) { %><span aria-current="page"><%= n %></span>
+        <% } else { %><a href="<%= pager.link(n) %>"><%= n %></a><% } %>
+      <% }) %>
+      <% if (pager.page < pager.pages) { %><a href="<%= pager.link(pager.page + 1) %>" rel="next" aria-label="Следующая страница"><%- icon('right', 15) %></a><% } else { %><span class="is-disabled"><%- icon('right', 15) %></span><% } %>
+    </nav>
+  <% } %>
+</div>
+<% } %>

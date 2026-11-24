@@ -1,0 +1,472 @@
+<%- include('partials/head') %>
+<%
+  const s = d.summary;
+  const pct = (v) => String(v).replace('.', ',');
+  // Delta badge: direction decides the colour; "—" when the previous period has no data.
+  const delta = (value, { invert = false } = {}) => {
+    if (value === null || value === undefined) return '<span class="delta delta--flat" title="Нет данных за предыдущий период">—</span>';
+    if (value === 0) return '<span class="delta delta--flat">0 %</span>';
+    const up = value > 0;
+    const good = invert ? !up : up;
+    return `<span class="delta delta--${good ? 'up' : 'down'}">${up ? '▲' : '▼'} ${pct(Math.abs(value))} %</span>`;
+  };
+  const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)'];
+  const sum = (arr, key) => arr.reduce((t, x) => t + (x[key] || 0), 0);
+  const maxOf = (arr, key) => Math.max(1, ...arr.map((x) => x[key] || 0));
+  const channelOrder = ['site', 'tma', 'bot', 'admin'];
+  const channels = [...d.channels].sort((a, b) => channelOrder.indexOf(a.channel) - channelOrder.indexOf(b.channel));
+  const channelRevenue = sum(channels, 'revenue');
+  const deviceOrder = ['desktop', 'mobile', 'tablet'];
+  const devices = [...d.devices].sort((a, b) => deviceOrder.indexOf(a.device) - deviceOrder.indexOf(b.device));
+  const hasTraffic = s.pageViews > 0;
+  const hasOrders = s.orders > 0;
+-%>
+<div class="page-head">
+  <div>
+    <h1>Дашборд</h1>
+    <p class="page-head__sub">Собственная аналитика магазина: посещения, заказы и выручка по сайту, боту и мини-приложению.</p>
+  </div>
+</div>
+
+<div class="filter-row">
+  <nav class="segmented" aria-label="Период">
+    <% Object.entries(presets).forEach(([key, label]) => { %>
+      <a href="/admin?range=<%= key %>"<%- range.preset === key ? ' aria-current="true"' : '' %>><%= label %></a>
+    <% }) %>
+  </nav>
+  <form class="range-form" method="get" action="/admin">
+    <label class="visually-hidden" for="range-from">С даты</label>
+    <input class="input" type="date" id="range-from" name="from" value="<%= range.from %>" max="<%= isoDate(Date.now()) %>" required>
+    <span class="muted">—</span>
+    <label class="visually-hidden" for="range-to">По дату</label>
+    <input class="input" type="date" id="range-to" name="to" value="<%= range.to %>" max="<%= isoDate(Date.now()) %>" required>
+    <button class="btn" type="submit">Показать</button>
+  </form>
+  <p class="filter-row__note"><strong><%= rangeLabel %></strong><br>сравнение с периодом <%= prevLabel %></p>
+</div>
+
+<section class="kpis" aria-label="Ключевые показатели">
+  <div class="kpi">
+    <div class="kpi__label">Выручка</div>
+    <div class="kpi__value"><%= formatNumber(s.revenue) %> <small>сум</small></div>
+    <div class="kpi__meta"><%- delta(s.delta.revenue) %><span>было <%= formatCompact(s.prev.revenue) %></span></div>
+    <%- spark.revenue %>
+  </div>
+  <div class="kpi">
+    <div class="kpi__label">Оплаченные заказы</div>
+    <div class="kpi__value"><%= formatNumber(s.paidOrders) %> <small>из <%= formatNumber(s.orders) %></small></div>
+    <div class="kpi__meta"><%- delta(s.delta.paidOrders) %><span>было <%= formatNumber(s.prev.paidOrders) %></span></div>
+    <%- spark.paidOrders %>
+  </div>
+  <div class="kpi">
+    <div class="kpi__label">Средний чек</div>
+    <div class="kpi__value"><%= formatNumber(s.avgCheck) %> <small>сум</small></div>
+    <div class="kpi__meta"><%- delta(s.delta.avgCheck) %><span>было <%= formatCompact(s.prev.avgCheck) %></span></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi__label">Конверсия сайта в оплату</div>
+    <div class="kpi__value"><%= pct(s.conversion) %> <small>%</small></div>
+    <div class="kpi__meta"><%- delta(s.delta.conversion) %><span>было <%= pct(s.prev.conversion) %> %</span></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi__label">Посетители сайта</div>
+    <div class="kpi__value"><%= formatNumber(s.visitors) %></div>
+    <div class="kpi__meta"><%- delta(s.delta.visitors) %><span>было <%= formatNumber(s.prev.visitors) %></span></div>
+    <%- spark.visitors %>
+  </div>
+  <div class="kpi">
+    <div class="kpi__label">Просмотры страниц</div>
+    <div class="kpi__value"><%= formatNumber(s.pageViews) %></div>
+    <div class="kpi__meta"><%- delta(s.delta.pageViews) %><span>было <%= formatNumber(s.prev.pageViews) %></span></div>
+    <%- spark.pageViews %>
+  </div>
+  <div class="kpi">
+    <div class="kpi__label">Новые клиенты</div>
+    <div class="kpi__value"><%= formatNumber(s.newCustomers) %></div>
+    <div class="kpi__meta"><%- delta(s.delta.newCustomers) %><span>было <%= formatNumber(s.prev.newCustomers) %></span></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi__label">Активные подписки</div>
+    <div class="kpi__value"><%= formatNumber(s.activeSubscriptions) %> <small>+<%= formatNumber(s.newSubscriptions) %> новых</small></div>
+    <div class="kpi__meta"><span>MRR <%= formatSum(subStats.mrr) %></span></div>
+  </div>
+</section>
+
+<div class="cols cols--2 cols--stretch">
+  <section class="panel">
+    <div class="panel__head">
+      <div>
+        <h2>Посещаемость</h2>
+        <p><%= weekly ? 'По неделям · сумма дневных посетителей и просмотров страниц' : 'По дням · уникальные посетители и просмотры страниц сайта' %></p>
+      </div>
+      <div class="chart-card__legend">
+        <span class="legend-key" style="--key: var(--series-1)">Посетители <b><%= formatNumber(s.visitors) %></b></span>
+        <span class="legend-key" style="--key: var(--series-2)">Просмотры <b><%= formatNumber(s.pageViews) %></b></span>
+      </div>
+    </div>
+    <div class="panel__body panel__body--chart">
+      <% if (hasTraffic) { %>
+        <div class="chart"><canvas id="chart-traffic" role="img" aria-label="График посетителей и просмотров за период"></canvas></div>
+      <% } else { %>
+        <div class="empty empty--sm"><span class="empty__icon"><%- icon('chart', 22) %></span><span class="empty__title">Посещений пока нет</span><p>Как только на сайт придут первые посетители, здесь появится график.</p></div>
+      <% } %>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head">
+      <div>
+        <h2>Продажи</h2>
+        <p><%= weekly ? 'По неделям' : 'По дням' %> · по дате оформления заказа, все каналы</p>
+      </div>
+      <button class="btn btn--sm btn--quiet" type="button" data-toggle-target="series-table" aria-expanded="false"><%- icon('table', 14) %> Таблица</button>
+    </div>
+    <div class="panel__body">
+      <% if (hasOrders) { %>
+        <div class="chart-stack">
+          <div>
+            <div class="chart-title"><span>Выручка, сум</span><b><%= formatSum(s.revenue) %></b></div>
+            <div class="chart chart--xs"><canvas id="chart-revenue" role="img" aria-label="Выручка за период"></canvas></div>
+          </div>
+          <div>
+            <div class="chart-title">
+              <span>Заказы, шт.</span>
+              <div class="chart-card__legend">
+                <span class="legend-key" style="--key: var(--series-1)">Оплачено <b><%= formatNumber(s.paidOrders) %></b></span>
+                <span class="legend-key" style="--key: var(--series-2)">Оформлено <b><%= formatNumber(s.orders) %></b></span>
+              </div>
+            </div>
+            <div class="chart" style="height: 5.5rem"><canvas id="chart-orders" role="img" aria-label="Оформленные и оплаченные заказы за период"></canvas></div>
+          </div>
+        </div>
+      <% } else { %>
+        <div class="empty empty--sm"><span class="empty__icon"><%- icon('bag', 22) %></span><span class="empty__title">Заказов за период нет</span><p>Выберите другой период или дождитесь первых заказов.</p></div>
+      <% } %>
+    </div>
+    <div class="data-table table-wrap" id="series-table" hidden>
+      <table class="table table--compact">
+        <thead><tr><th><%= weekly ? 'Неделя' : 'День' %></th><th class="num">Посетители</th><th class="num">Просмотры</th><th class="num">Заказы</th><th class="num">Оплачено</th><th class="num">Выручка</th></tr></thead>
+        <tbody>
+          <% [...series].reverse().forEach((row) => { %>
+            <tr><td class="t-nowrap"><%= row.label %></td><td class="num"><%= formatNumber(row.visitors) %></td><td class="num"><%= formatNumber(row.pageViews) %></td><td class="num"><%= formatNumber(row.orders) %></td><td class="num"><%= formatNumber(row.paidOrders) %></td><td class="num"><%= formatSum(row.revenue) %></td></tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div class="cols cols--2 cols--stretch section-gap">
+  <section class="panel">
+    <div class="panel__head">
+      <div>
+        <h2>Воронка сайта</h2>
+        <p>Уникальные посетители на каждом шаге и переход с предыдущего шага</p>
+      </div>
+    </div>
+    <div class="panel__body">
+      <% if (d.funnel[0].count > 0) { %>
+        <ol class="funnel">
+          <% d.funnel.forEach((step, i) => { %>
+            <li class="funnel__row">
+              <span class="funnel__label"><%= step.label %><% if (i > 0) { %><small>с прошлого шага: <%= pct(step.step_rate) %> %</small><% } %></span>
+              <span class="funnel__track"><span class="funnel__bar" style="width: <%= step.count ? Math.max(0.5, step.rate) : 0 %>%<%= step.count ? '' : '; min-width: 0' %>"></span></span>
+              <span class="funnel__value"><%= formatNumber(step.count) %><small><%= pct(step.rate) %> %</small></span>
+            </li>
+          <% }) %>
+        </ol>
+      <% } else { %>
+        <div class="empty empty--sm"><span class="empty__icon"><%- icon('chart', 22) %></span><span class="empty__title">Данных для воронки пока нет</span><p>Воронка строится по посещениям сайта и действиям покупателей.</p></div>
+      <% } %>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head">
+      <div>
+        <h2>Воронка мини-приложения</h2>
+        <p>Пользователи Telegram на каждом шаге и переход с предыдущего шага</p>
+      </div>
+    </div>
+    <div class="panel__body">
+      <% if (tmaFunnel[0].count > 0) { %>
+        <ol class="funnel">
+          <% tmaFunnel.forEach((step, i) => { %>
+            <li class="funnel__row">
+              <span class="funnel__label"><%= step.label %><% if (i > 0) { %><small>с прошлого шага: <%= pct(step.step_rate) %> %</small><% } %></span>
+              <span class="funnel__track"><span class="funnel__bar" style="width: <%= step.count ? Math.max(0.5, step.rate) : 0 %>%<%= step.count ? '' : '; min-width: 0' %>"></span></span>
+              <span class="funnel__value"><%= formatNumber(step.count) %><small><%= pct(step.rate) %> %</small></span>
+            </li>
+          <% }) %>
+        </ol>
+      <% } else { %>
+        <div class="empty empty--sm"><span class="empty__icon"><%- icon('telegram', 22) %></span><span class="empty__title">Мини-приложение за период не открывали</span><p>Когда пользователи Telegram начнут открывать магазин в боте, здесь появится их путь до оплаты.</p></div>
+      <% } %>
+    </div>
+  </section>
+</div>
+
+<div class="cols cols--3 cols--stretch section-gap">
+  <section class="panel">
+    <div class="panel__head">
+      <div><h2>Каналы продаж</h2><p>Выручка оплаченных заказов</p></div>
+    </div>
+    <div class="panel__body">
+      <% if (channels.length && channelRevenue > 0) { %>
+        <div class="segbar" role="img" aria-label="Доли каналов в выручке">
+          <% channels.forEach((c) => { if (c.revenue > 0) { %><span style="flex: <%= c.revenue %>; --key: <%= SERIES[channelOrder.indexOf(c.channel)] || SERIES[3] %>" title="<%= c.label %>: <%= formatSum(c.revenue) %>"></span><% } }) %>
+        </div>
+        <ul class="split-list">
+          <% channels.forEach((c) => { %>
+            <li>
+              <span class="swatch" style="--key: <%= SERIES[channelOrder.indexOf(c.channel)] || SERIES[3] %>"></span>
+              <span class="name"><%= c.label %><small><%= formatNumber(c.paidOrders) %> из <%= formatNumber(c.orders) %> <%= plural(c.orders, ['заказа', 'заказов', 'заказов']) %> оплачено</small></span>
+              <span class="val"><%= formatCompact(c.revenue) %><small><%= pct(Math.round((c.revenue / channelRevenue) * 1000) / 10) %> %</small></span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } else { %>
+        <div class="empty empty--sm"><span class="empty__title">Оплаченных заказов за период нет</span></div>
+      <% } %>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head">
+      <div><h2>Устройства</h2><p>Посетители сайта по типу устройства</p></div>
+    </div>
+    <div class="panel__body">
+      <% if (devices.length) { %>
+        <div class="segbar" role="img" aria-label="Доли устройств">
+          <% devices.forEach((x) => { %><span style="flex: <%= x.visitors %>; --key: <%= SERIES[deviceOrder.indexOf(x.device)] || SERIES[3] %>" title="<%= x.label %>: <%= x.share %> %"></span><% }) %>
+        </div>
+        <ul class="split-list">
+          <% devices.forEach((x) => { %>
+            <li>
+              <span class="swatch" style="--key: <%= SERIES[deviceOrder.indexOf(x.device)] || SERIES[3] %>"></span>
+              <span class="name"><%= x.label %></span>
+              <span class="val"><%= formatNumber(x.visitors) %><small><%= pct(x.share) %> %</small></span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } else { %>
+        <div class="empty empty--sm"><span class="empty__title">Нет данных о посещениях</span></div>
+      <% } %>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head">
+      <div><h2>Типы трафика</h2><p>Посетители по способу перехода</p></div>
+    </div>
+    <div class="panel__body">
+      <% if (d.mediums.length) { const top = maxOf(d.mediums, 'visitors'); %>
+        <ul class="meter-list meter-list--tight">
+          <% d.mediums.slice(0, 6).forEach((m) => { %>
+            <li class="meter-list__row">
+              <span class="meter-list__name"><%= m.label %></span>
+              <span class="meter-list__track"><span class="meter-list__bar" style="width: <%= (m.visitors / top) * 100 %>%"></span></span>
+              <span class="meter-list__value"><%= formatNumber(m.visitors) %><small><%= pct(m.share) %> %</small></span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } else { %>
+        <div class="empty empty--sm"><span class="empty__title">Нет данных о посещениях</span></div>
+      <% } %>
+    </div>
+  </section>
+</div>
+
+<div class="cols cols--2 section-gap">
+  <section class="panel">
+    <div class="panel__head">
+      <div><h2>Источники трафика</h2><p>Откуда приходят посетители: источник и тип канала</p></div>
+    </div>
+    <div class="panel__body">
+      <% if (d.sources.length) { const top = maxOf(d.sources, 'visitors'); %>
+        <ul class="meter-list">
+          <% d.sources.forEach((src) => { %>
+            <li class="meter-list__row">
+              <span class="meter-list__name" title="<%= src.source %>"><%= src.source === 'direct' ? 'Прямые заходы' : src.source %><small><%= (d.mediums.find((m) => m.medium === src.medium) || {}).label || src.medium %></small></span>
+              <span class="meter-list__track"><span class="meter-list__bar" style="width: <%= (src.visitors / top) * 100 %>%"></span></span>
+              <span class="meter-list__value"><%= formatNumber(src.visitors) %><small><%= pct(src.share) %> %</small></span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } else { %>
+        <div class="empty empty--sm"><span class="empty__title">Источников пока нет</span><p>Добавляйте к ссылкам метки utm_source и utm_campaign — переходы появятся здесь.</p></div>
+      <% } %>
+    </div>
+    <% if (d.campaigns.length) { %>
+      <div class="table-wrap" style="border-top: 1px solid var(--adm-line)">
+        <table class="table table--compact">
+          <thead><tr><th>UTM-кампания</th><th>Источник</th><th class="num">Посетители</th><th class="num">Просмотры</th></tr></thead>
+          <tbody>
+            <% d.campaigns.forEach((c) => { %>
+              <tr><td class="t-main"><%= c.campaign %></td><td><%= c.source %></td><td class="num"><%= formatNumber(c.visitors) %></td><td class="num"><%= formatNumber(c.views) %></td></tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head">
+      <div><h2>Популярные страницы</h2><p>Самые просматриваемые страницы сайта</p></div>
+    </div>
+    <% if (d.topPages.length) { const top = maxOf(d.topPages, 'views'); %>
+      <div class="table-wrap">
+        <table class="table table--compact">
+          <thead><tr><th>Страница</th><th class="num">Просмотры</th><th class="num">Посетители</th></tr></thead>
+          <tbody>
+            <% d.topPages.forEach((p) => { %>
+              <tr>
+                <td style="width: 60%"><a class="t-main" href="<%= p.path %>" target="_blank" rel="noopener"><%= p.path %></a><span class="inline-bar"><span style="width: <%= (p.views / top) * 100 %>%"></span></span></td>
+                <td class="num"><%= formatNumber(p.views) %></td>
+                <td class="num"><%= formatNumber(p.visitors) %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <div class="empty empty--sm"><span class="empty__title">Просмотров пока нет</span></div>
+    <% } %>
+  </section>
+</div>
+
+<div class="cols cols--2 section-gap">
+  <section class="panel">
+    <div class="panel__head">
+      <div><h2>Лидеры продаж</h2><p>Товары по выручке оплаченных заказов</p></div>
+      <a class="panel__link" href="/admin/products">Все товары</a>
+    </div>
+    <% if (d.topProducts.length) { const top = maxOf(d.topProducts, 'revenue'); %>
+      <div class="table-wrap">
+        <table class="table table--compact">
+          <thead><tr><th>Товар</th><th class="num">Продано</th><th class="num">Просмотры</th><th class="num">Выручка</th></tr></thead>
+          <tbody>
+            <% d.topProducts.forEach((p) => { %>
+              <tr>
+                <td>
+                  <div class="cell-product">
+                    <img class="thumb thumb--sm" src="<%= p.image || '/img/placeholder.svg' %>" alt="" loading="lazy" width="32" height="32">
+                    <div style="flex: 1; min-width: 0">
+                      <% if (p.product_id) { %><a class="t-main" href="/admin/products/<%= p.product_id %>"><%= p.title %></a><% } else { %><span class="t-main"><%= p.title %></span><% } %>
+                      <span class="inline-bar"><span style="width: <%= (p.revenue / top) * 100 %>%"></span></span>
+                    </div>
+                  </div>
+                </td>
+                <td class="num"><%= formatNumber(p.qty) %> шт.</td>
+                <td class="num"><%= formatNumber(p.views) %></td>
+                <td class="num"><%= formatSum(p.revenue) %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <div class="empty empty--sm"><span class="empty__title">Продаж за период нет</span></div>
+    <% } %>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head">
+      <div><h2>Telegram: бот и мини-приложение</h2><p>Аудитория бота и активность за период</p></div>
+      <div class="chart-card__legend">
+        <span class="legend-key" style="--key: var(--series-1)">Запуски бота</span>
+        <span class="legend-key" style="--key: var(--series-2)">Открытия мини-приложения</span>
+      </div>
+    </div>
+    <div class="panel__body">
+      <div class="mini-stats">
+        <div><div class="mini-stat__label">Пользователей бота</div><div class="mini-stat__value"><%= formatNumber(d.telegram.totalUsers) %> <small>+<%= formatNumber(d.telegram.newUsers) %> новых</small></div></div>
+        <div><div class="mini-stat__label">Открывали мини-приложение</div><div class="mini-stat__value"><%= formatNumber(d.telegram.tmaUsers) %> <small>чел.</small></div></div>
+        <div><div class="mini-stat__label">Заказы из Telegram</div><div class="mini-stat__value"><%= formatNumber(d.telegram.tmaOrders) %> <small><%= formatCompact(d.telegram.tmaRevenue) %> сум</small></div></div>
+      </div>
+      <% if (d.telegram.botStarts + d.telegram.tmaOpens > 0) { %>
+        <div class="chart chart--sm"><canvas id="chart-telegram" role="img" aria-label="Запуски бота и открытия мини-приложения за период"></canvas></div>
+      <% } else { %>
+        <div class="empty empty--sm"><span class="empty__icon"><%- icon('telegram', 22) %></span><span class="empty__title">Активности в Telegram за период нет</span><p><%= botEnabled ? 'Поделитесь ссылкой на бота — запуски появятся здесь.' : 'Бот не подключён: задайте BOT_TOKEN в .env.' %></p></div>
+      <% } %>
+      <% if (d.telegram.blockedUsers) { %><p class="help" style="margin: var(--space-3) 0 0">Заблокировали бота: <%= formatNumber(d.telegram.blockedUsers) %> — им не приходят рассылки и уведомления.</p><% } %>
+    </div>
+  </section>
+</div>
+
+<div class="cols cols--wide-left section-gap">
+  <section class="panel">
+    <div class="panel__head">
+      <h2>Последние заказы</h2>
+      <a class="panel__link" href="/admin/orders">Все заказы</a>
+    </div>
+    <% if (recentOrders.length) { %>
+      <div class="table-wrap">
+        <table class="table table--compact">
+          <thead><tr><th>Заказ</th><th>Клиент</th><th>Канал</th><th>Статус</th><th class="num">Сумма</th></tr></thead>
+          <tbody>
+            <% recentOrders.forEach((o) => { %>
+              <tr>
+                <td class="t-nowrap"><a class="t-main" href="/admin/orders/<%= o.id %>"><%= o.number %></a><span class="t-sub"><%= formatDateTime(o.created_at) %></span></td>
+                <td><%= o.customer_name %></td>
+                <td><span class="<%= badgeClass('channel', o.channel) %>"><%= o.channel_label %></span></td>
+                <td><span class="<%= badgeClass('order', o.status) %>"><%= o.status_label %></span></td>
+                <td class="num"><%= formatSum(o.total) %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %>
+      <div class="empty empty--sm"><span class="empty__icon"><%- icon('bag', 22) %></span><span class="empty__title">Заказов пока нет</span><p>Первый заказ с сайта, из бота или мини-приложения появится здесь.</p></div>
+    <% } %>
+  </section>
+
+  <div class="stack-4">
+    <section class="panel">
+      <div class="panel__head">
+        <h2>Ждут ответа <% if (openThreads.total) { %><span class="badge badge--warning"><%= openThreads.total %></span><% } %></h2>
+        <a class="panel__link" href="/admin/feedback?status=open">Все обращения</a>
+      </div>
+      <% if (openThreads.items.length) { %>
+        <ul class="feed">
+          <% openThreads.items.forEach((t) => { %>
+            <li>
+              <div class="feed__body">
+                <div class="feed__title"><a href="/admin/feedback/<%= t.id %>"><%= t.name || 'Без имени' %></a><span class="<%= badgeClass('channel', t.channel) %>"><%= t.channel_label %></span></div>
+                <div class="feed__text"><%= t.last_text %></div>
+              </div>
+              <span class="feed__time"><%= timeAgo(t.last_message_at) %></span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } else { %>
+        <div class="empty empty--sm"><span class="empty__icon"><%- icon('check', 22) %></span><span class="empty__title">Все обращения разобраны</span></div>
+      <% } %>
+    </section>
+
+    <section class="panel">
+      <div class="panel__head">
+        <h2>Заканчиваются на складе</h2>
+        <a class="panel__link" href="/admin/products?stock=low">К товарам</a>
+      </div>
+      <% if (lowStock.length) { %>
+        <ul class="feed">
+          <% lowStock.forEach((p) => { %>
+            <li>
+              <img class="thumb thumb--sm" src="<%= p.image %>" alt="" loading="lazy" width="32" height="32">
+              <div class="feed__body"><div class="feed__title"><a href="/admin/products/<%= p.id %>"><%= p.title %></a></div></div>
+              <span class="<%= p.stock > 0 ? 'badge badge--warning' : 'badge badge--danger' %>"><%= p.stock > 0 ? `осталось ${p.stock} шт.` : 'нет в наличии' %></span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } else { %>
+        <div class="empty empty--sm"><span class="empty__title">Остатков хватает</span><p>Товары с остатком 5 шт. и меньше появятся здесь.</p></div>
+      <% } %>
+    </section>
+  </div>
+</div>
+
+<script type="application/json" id="dashboard-data"><%- jsonForScript(chartData) %></script>
+<%- include('partials/foot', { scripts: ['/vendor/chart.js/chart.umd.min.js', '/admin/js/dashboard.js'] }) %>

@@ -1,0 +1,75 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Подписки</h1>
+    <p class="page-head__sub">Подписки клиентов на кофе. Подписка создаётся и продлевается при оплате заказа с планом.</p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn" href="/admin/plans"><%- icon('calendar', 15) %> Планы подписки</a>
+  </div>
+</div>
+
+<section class="kpis" aria-label="Подписки">
+  <div class="kpi"><div class="kpi__label">Активные</div><div class="kpi__value"><%= formatNumber(stats.active) %></div></div>
+  <div class="kpi"><div class="kpi__label">На паузе</div><div class="kpi__value"><%= formatNumber(stats.paused) %></div></div>
+  <div class="kpi"><div class="kpi__label">Истекли / отменены</div><div class="kpi__value"><%= formatNumber(stats.expired) %> <small>/ <%= formatNumber(stats.cancelled) %></small></div></div>
+  <div class="kpi"><div class="kpi__label">MRR</div><div class="kpi__value"><%= formatNumber(stats.mrr) %> <small>сум</small></div></div>
+</section>
+
+<section class="panel">
+  <form class="toolbar" method="get" action="/admin/subscriptions">
+    <div class="field">
+      <label class="field__label" for="f-status">Статус</label>
+      <select class="select" id="f-status" name="status" data-autosubmit>
+        <option value="">Все статусы</option>
+        <% Object.entries(statuses).forEach(([k, v]) => { %><option value="<%= k %>"<%= filters.status === k ? ' selected' : '' %>><%= v %></option><% }) %>
+      </select>
+    </div>
+    <div class="field">
+      <label class="field__label" for="f-plan">План</label>
+      <select class="select" id="f-plan" name="plan" data-autosubmit>
+        <option value="">Все планы</option>
+        <% plans.forEach((p) => { %><option value="<%= p.id %>"<%= Number(filters.plan) === p.id ? ' selected' : '' %>><%= p.title %></option><% }) %>
+      </select>
+    </div>
+    <noscript><button class="btn btn--dark" type="submit">Показать</button></noscript>
+    <% if (filters.status || filters.plan) { %><a class="btn btn--quiet" href="/admin/subscriptions">Сбросить</a><% } %>
+  </form>
+
+  <% if (items.length) { %>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Клиент</th><th>План</th><th>Статус</th><th>Начало</th><th>Оплачено до</th><th class="num">Продлений</th><th><span class="visually-hidden">Действия</span></th></tr></thead>
+        <tbody>
+          <% items.forEach((s) => { %>
+            <tr>
+              <td><a class="t-main" href="/admin/customers/<%= s.customer_id %>"><%= s.customer_name || 'Без имени' %></a><span class="t-sub"><%= formatPhone(s.customer_phone) %><%= s.customer_tg_username ? ' · @' + s.customer_tg_username : '' %></span></td>
+              <td><%= s.plan_title %><span class="t-sub"><%= formatSum(s.plan_price) %> / <%= s.plan_period_days %> дн.</span></td>
+              <td><span class="<%= badgeClass('subscription', s.status) %>"><%= s.status_label %></span></td>
+              <td class="t-nowrap"><%= formatDateShort(s.started_at) %></td>
+              <td class="t-nowrap"><%= formatDateShort(s.current_period_end) %><% if (s.status === 'active') { %><span class="t-sub"><%= s.days_left > 0 ? `ещё ${s.days_left} ${plural(s.days_left, ['день', 'дня', 'дней'])}` : 'истекает сегодня' %></span><% } %></td>
+              <td class="num"><%= s.renewals %></td>
+              <td class="t-actions">
+                <% if (s.last_order_id) { %><a class="btn btn--sm btn--quiet" href="/admin/orders/<%= s.last_order_id %>">Заказ</a><% } %>
+                <% if (s.status === 'active') { %>
+                  <form method="post" action="/admin/subscriptions/<%= s.id %>/pause"><%- csrfField %><button class="btn btn--sm" type="submit">Пауза</button></form>
+                <% } else if (s.status === 'paused') { %>
+                  <form method="post" action="/admin/subscriptions/<%= s.id %>/resume"><%- csrfField %><button class="btn btn--sm" type="submit">Возобновить</button></form>
+                <% } %>
+                <% if (s.status === 'active' || s.status === 'paused') { %>
+                  <form method="post" action="/admin/subscriptions/<%= s.id %>/cancel" data-confirm="Отменить подписку клиента «<%= s.customer_name %>» на план «<%= s.plan_title %>»? Действие нельзя отменить." data-confirm-ok="Отменить подписку">
+                    <%- csrfField %><button class="btn btn--sm btn--danger-quiet" type="submit">Отменить</button>
+                  </form>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <%- include('../partials/pager') %>
+  <% } else { %>
+    <div class="empty"><span class="empty__icon"><%- icon('repeat', 22) %></span><span class="empty__title"><%= filters.status || filters.plan ? 'Подписок с такими условиями нет' : 'Подписок пока нет' %></span><p>Подписка появится, когда клиент оплатит один из планов на сайте или в мини-приложении.</p></div>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

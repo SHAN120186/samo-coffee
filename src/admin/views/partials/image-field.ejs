@@ -1,0 +1,21 @@
+<%# Image URL input with preview, upload and library picker.
+    Params: name, value, [label], [hint], [error], [id] %>
+<% const _id = locals.id || ('img-' + String(name).replace(/[^a-z0-9]+/gi, '-')); %>
+<div class="field<%= locals.error ? ' field--invalid' : '' %>">
+  <% if (locals.label) { %><label class="field__label" for="<%= _id %>"><%= label %></label><% } %>
+  <div class="image-field" data-image-field>
+    <div class="image-field__preview" data-image-preview>
+      <% if (value) { %><img src="<%= value %>" alt=""><% } else { %><%- icon('image', 26) %><% } %>
+    </div>
+    <div class="image-field__controls">
+      <input class="input" type="text" id="<%= _id %>" name="<%= name %>" value="<%= value || '' %>" placeholder="/uploads/… или https://…" data-image-input autocomplete="off">
+      <div class="image-field__buttons">
+        <button class="btn btn--sm" type="button" data-image-upload><%- icon('upload', 14) %> Загрузить</button>
+        <button class="btn btn--sm btn--quiet" type="button" data-image-pick><%- icon('image', 14) %> Из медиатеки</button>
+        <button class="btn btn--sm btn--quiet" type="button" data-image-clear>Убрать</button>
+        <span class="image-field__status" data-image-status role="status"></span>
+      </div>
+      <% if (locals.error) { %><span class="field__error"><%= error %></span><% } else if (locals.hint) { %><span class="field__hint"><%= hint %></span><% } %>
+    </div>
+  </div>
+</div>

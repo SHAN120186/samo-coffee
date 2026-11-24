@@ -1,0 +1,85 @@
+<%- include('partials/head', { bodyClass: 'page-subscriptions' }) %>
+
+<main id="main">
+  <section class="page-hero page-hero--split">
+    <div class="container page-hero__grid">
+      <div>
+        <% if (c.eyebrow) { %><p class="eyebrow"><%= c.eyebrow %></p><% } %>
+        <h1 class="page-hero__title"><%= c.title %></h1>
+<% if (c.intro) { -%>
+        <p class="lead"><%= c.intro %></p>
+<% } -%>
+        <p class="page-hero__actions">
+          <a class="btn btn--primary btn--lg" href="#plans">Выбрать план<%- icon('arrow', { size: 18 }) %></a>
+        </p>
+      </div>
+<% if (c.image) { -%>
+      <div class="page-hero__media">
+        <img src="<%= c.image %>" alt="" width="1000" height="760" fetchpriority="high">
+      </div>
+<% } -%>
+    </div>
+  </section>
+
+  <section class="section" id="plans" aria-labelledby="plans-title">
+    <div class="container">
+      <div class="section-head section-head--center" data-reveal>
+        <h2 class="section-head__title" id="plans-title"><%= c.plans_title %></h2>
+      </div>
+<% if (plans.length) { -%>
+      <div class="plans plans--<%= Math.min(plans.length, 3) %>">
+<% plans.forEach((plan) => { -%>
+        <%- include('partials/plan-card', { plan }) %>
+<% }) -%>
+      </div>
+<% } else { -%>
+      <div class="empty"><p class="empty__text">Планы подписки скоро появятся. А пока загляните в <a href="/catalog">каталог</a>.</p></div>
+<% } -%>
+<% if (c.note) { -%>
+      <p class="plans__note"><%- icon('refresh', { size: 18 }) %><%= c.note %></p>
+<% } -%>
+    </div>
+  </section>
+
+<% if (steps.length) { -%>
+  <section class="section section--alt" aria-labelledby="how-title">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <h2 class="section-head__title" id="how-title"><%= c.how_title %></h2>
+      </div>
+      <ol class="how">
+<% const stepIcons = ['calendar', 'flame', 'truck']; -%>
+<% steps.forEach((step, i) => { -%>
+        <li class="how__step" data-reveal>
+          <span class="how__icon" aria-hidden="true"><%- icon(stepIcons[i] || 'check', { size: 24 }) %></span>
+          <span class="how__num" aria-hidden="true">Шаг <%= i + 1 %></span>
+          <h3 class="how__title"><%= step.title %></h3>
+          <p><%= step.text %></p>
+        </li>
+<% }) -%>
+      </ol>
+    </div>
+  </section>
+<% } -%>
+
+<% if (faq.length) { -%>
+  <section class="section" aria-labelledby="subs-faq-title">
+    <div class="container container--narrow">
+      <div class="section-head" data-reveal>
+        <h2 class="section-head__title" id="subs-faq-title"><%= c.faq_title %></h2>
+        <a class="link-arrow" href="/faq">Все вопросы<%- icon('arrow', { size: 18 }) %></a>
+      </div>
+      <div class="acc-list">
+<% faq.forEach((item) => { -%>
+        <details class="acc">
+          <summary><span><%= item.question %></span><span class="acc__icon" aria-hidden="true"><%- icon('plus', { size: 18 }) %></span></summary>
+          <div class="acc__body prose"><%- item.answer %></div>
+        </details>
+<% }) -%>
+      </div>
+    </div>
+  </section>
+<% } -%>
+</main>
+
+<%- include('partials/foot') %>

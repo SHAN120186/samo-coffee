@@ -1,0 +1,35 @@
+<%- include('partials/head', { bodyClass: 'page-blog' }) %>
+
+<main id="main">
+  <section class="page-hero">
+    <div class="container">
+      <h1 class="page-hero__title"><%= c.title %></h1>
+<% if (c.intro) { -%>
+      <p class="lead"><%= c.intro %></p>
+<% } -%>
+    </div>
+  </section>
+
+  <section class="section section--flush-top">
+    <div class="container">
+<% if (posts.length) { -%>
+<% const lead = pager.page === 1 ? posts[0] : null; const rest = lead ? posts.slice(1) : posts; -%>
+<% if (lead) { -%>
+      <%- include('partials/post-card', { post: lead, lead: true, headingTag: 'h2' }) %>
+<% } -%>
+<% if (rest.length) { -%>
+      <div class="posts<%= lead ? ' posts--after-lead' : '' %>">
+<% rest.forEach((post) => { -%>
+        <%- include('partials/post-card', { post, lead: false, headingTag: 'h2' }) %>
+<% }) -%>
+      </div>
+<% } -%>
+      <%- include('partials/pagination', { pager, pageUrl }) %>
+<% } else { -%>
+      <div class="empty"><p class="empty__text">Скоро здесь появятся первые статьи. А пока — загляните в <a href="/catalog">каталог</a>.</p></div>
+<% } -%>
+    </div>
+  </section>
+</main>
+
+<%- include('partials/foot') %>

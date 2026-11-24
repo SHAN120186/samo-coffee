@@ -1,0 +1,48 @@
+<%
+  const low = p.in_stock && p.stock <= 5;
+  const tag = locals.headingTag || 'h3';
+-%>
+<article class="pcard<%= p.in_stock ? '' : ' pcard--out' %>" data-reveal>
+  <div class="pcard__media">
+    <img src="<%= p.image %>" alt="<%= p.title %>" width="800" height="800" loading="<%= locals.eager ? 'eager' : 'lazy' %>" decoding="async">
+    <div class="pcard__badges">
+<% if (!p.in_stock) { -%>
+      <span class="badge badge--dark">Нет в наличии</span>
+<% } else { -%>
+<% if (p.discount_percent) { -%>
+      <span class="badge badge--sale">−<%= p.discount_percent %>%</span>
+<% } -%>
+<% if (low) { -%>
+      <span class="badge badge--light">Осталось <%= p.stock %> шт.</span>
+<% } -%>
+<% } -%>
+    </div>
+  </div>
+  <div class="pcard__body">
+    <p class="pcard__cat"><%= p.category_title || 'Samo Coffee' %><% if (p.weight_g && p.roast) { %> · <%= p.weight_g %> г<% } %></p>
+    <<%= tag %> class="pcard__title"><a class="pcard__link" href="<%= p.url %>"><%= p.title %></a></<%= tag %>>
+<% if (p.subtitle) { -%>
+    <p class="pcard__notes"><%= p.subtitle %></p>
+<% } -%>
+    <div class="pcard__foot">
+      <p class="pcard__price">
+        <span class="price"><%= formatSum(p.price) %></span>
+<% if (p.old_price) { -%>
+        <s class="price price--old"><span class="visually-hidden">Старая цена: </span><%= formatNumber(p.old_price) %></s>
+<% } -%>
+      </p>
+<% if (p.in_stock) { -%>
+      <form class="pcard__form" method="post" action="/cart/add" data-cart-add>
+        <%- csrfField %>
+        <input type="hidden" name="product_id" value="<%= p.id %>">
+        <input type="hidden" name="qty" value="1">
+        <input type="hidden" name="redirect" value="<%= currentUrl %>">
+        <button class="pcard__add" type="submit" aria-label="Добавить «<%= p.title %>» в корзину" title="В корзину">
+          <span class="pcard__add-plus"><%- icon('plus', { size: 20 }) %></span>
+          <span class="pcard__add-check"><%- icon('check', { size: 20 }) %></span>
+        </button>
+      </form>
+<% } -%>
+    </div>
+  </div>
+</article>

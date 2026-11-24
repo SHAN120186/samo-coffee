@@ -1,0 +1,22 @@
+<%
+  const highlighted = Boolean(plan.badge);
+-%>
+<article class="plan<%= highlighted ? ' plan--featured' : '' %>" data-reveal>
+<% if (plan.badge) { -%>
+  <span class="plan__badge"><%= plan.badge %></span>
+<% } -%>
+  <img class="plan__img" src="<%= plan.image %>" alt="" width="800" height="600" loading="lazy" decoding="async">
+  <h3 class="plan__title"><%= plan.title %></h3>
+<% if (plan.description) { -%>
+  <p class="plan__desc"><%= plan.description %></p>
+<% } -%>
+  <p class="plan__price"><span class="price"><%= formatSum(plan.price) %></span> <span class="plan__period"><%= periodLabel(plan.period_days) %></span></p>
+<% if (plan.perks.length) { -%>
+  <ul class="plan__perks">
+<% plan.perks.forEach((perk) => { -%>
+    <li><%- icon('check', { size: 18 }) %><span><%= perk %></span></li>
+<% }) -%>
+  </ul>
+<% } -%>
+  <a class="btn <%= highlighted ? 'btn--primary' : 'btn--dark' %> btn--lg btn--block plan__cta" href="/subscriptions/<%= plan.slug %>" data-testid="plan-<%= plan.slug %>">Оформить подписку</a>
+</article>

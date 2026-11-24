@@ -1,0 +1,76 @@
+<%- include('partials/head', { bodyClass: 'page-catalog' }) %>
+
+<main id="main">
+  <section class="page-hero">
+    <div class="container">
+      <%- include('partials/breadcrumbs', { crumbs }) %>
+      <h1 class="page-hero__title"><%= category ? category.title : c.title %></h1>
+<% const intro = category ? (category.description || c.intro) : c.intro; -%>
+<% if (intro) { -%>
+      <p class="lead"><%= intro %></p>
+<% } -%>
+    </div>
+  </section>
+
+  <section class="section section--flush-top">
+    <div class="container">
+      <div class="toolbar">
+        <nav class="chips" aria-label="Категории">
+          <a class="chip<%= category ? '' : ' is-active' %>" href="<%= filterUrl('') %>"<% if (!category) { %> aria-current="true"<% } %>>Все <span class="chip__count"><%= allCount %></span></a>
+<% categories.forEach((cat) => { const active = category && category.id === cat.id; -%>
+          <a class="chip<%= active ? ' is-active' : '' %>" href="<%= filterUrl(cat.slug) %>"<% if (active) { %> aria-current="true"<% } %>><%= cat.title %> <span class="chip__count"><%= cat.product_count %></span></a>
+<% }) -%>
+        </nav>
+
+        <div class="toolbar__row">
+          <p class="toolbar__count" data-testid="catalog-count" role="status">
+<% if (q) { -%>
+            По запросу «<%= q %>» — <strong><%= total %></strong> <%= plural(total, ['товар', 'товара', 'товаров']) %>. <a href="<%= resetUrl %>">Сбросить поиск</a>
+<% } else { -%>
+            <%= total %> <%= plural(total, ['товар', 'товара', 'товаров']) %>
+<% } -%>
+          </p>
+          <form class="toolbar__form" method="get" action="/catalog" role="search" data-autosubmit>
+<% if (category) { -%>
+            <input type="hidden" name="category" value="<%= category.slug %>">
+<% } -%>
+            <label class="search">
+              <span class="visually-hidden">Поиск по каталогу</span>
+              <%- icon('search', { size: 18 }) %>
+              <input class="input" type="search" name="q" value="<%= q %>" placeholder="Поиск по каталогу" autocomplete="off" maxlength="80">
+            </label>
+            <label class="sort">
+              <span class="visually-hidden">Сортировка</span>
+              <select class="select" name="sort" data-autosubmit-on="change">
+<% sortOptions.forEach((o) => { -%>
+                <option value="<%= o.value %>"<%= o.value === sort ? ' selected' : '' %>><%= o.label %></option>
+<% }) -%>
+              </select>
+            </label>
+            <button class="btn btn--dark toolbar__submit" type="submit"><span class="visually-hidden">Найти</span><%- icon('arrow', { size: 18 }) %></button>
+          </form>
+        </div>
+      </div>
+
+<% if (products.length) { -%>
+      <div class="pgrid" data-testid="product-grid">
+<% products.forEach((p, i) => { -%>
+        <%- include('partials/product-card', { p, headingTag: 'h2', eager: i < 4 }) %>
+<% }) -%>
+      </div>
+      <%- include('partials/pagination', { pager, pageUrl }) %>
+<% } else { -%>
+      <div class="empty">
+        <img src="/img/placeholder.svg" alt="" width="160" height="160">
+        <p class="empty__text"><%= c.empty_text %></p>
+        <p class="cluster empty__actions">
+          <a class="btn btn--dark" href="/catalog">Весь каталог</a>
+          <a class="btn btn--ghost" href="/contacts">Написать нам</a>
+        </p>
+      </div>
+<% } -%>
+    </div>
+  </section>
+</main>
+
+<%- include('partials/foot') %>

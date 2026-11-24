@@ -1,0 +1,133 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Обращения</h1>
+    <p class="page-head__sub">Сообщения с сайта, из Telegram-бота и мини-приложения в одном окне. Ответы пользователям Telegram доставляет бот.</p>
+  </div>
+</div>
+
+<section class="panel">
+  <nav class="tabs" aria-label="Статус обращения">
+    <a href="<%= listLink({ status: '' }) %>"<%- filters.status ? '' : ' aria-current="true"' %>>Все <span class="count"><%= counts.open + counts.answered + counts.closed %></span></a>
+    <% Object.entries(statuses).forEach(([key, label]) => { %>
+      <a href="<%= listLink({ status: key }) %>"<%- filters.status === key ? ' aria-current="true"' : '' %>><%= label %> <span class="count"><%= counts[key] %></span></a>
+    <% }) %>
+  </nav>
+  <form class="toolbar" method="get" action="/admin/feedback">
+    <% if (filters.status) { %><input type="hidden" name="status" value="<%= filters.status %>"><% } %>
+    <div class="field toolbar__grow" style="max-width: 24rem">
+      <label class="field__label" for="f-search">Поиск</label>
+      <div class="search-input"><%- icon('search', 15) %><input class="input" type="search" id="f-search" name="search" value="<%= filters.search %>" placeholder="Имя, контакт или текст"></div>
+    </div>
+    <div class="field">
+      <label class="field__label" for="f-channel">Канал</label>
+      <select class="select" id="f-channel" name="channel" data-autosubmit>
+        <option value="">Все каналы</option>
+        <% Object.entries(channels).forEach(([k, v]) => { %><option value="<%= k %>"<%= filters.channel === k ? ' selected' : '' %>><%= v %></option><% }) %>
+      </select>
+    </div>
+    <button class="btn btn--dark" type="submit">Найти</button>
+    <% if (filters.search || filters.channel) { %><a class="btn btn--quiet" href="<%= listLink({ search: '', channel: '' }) %>">Сбросить</a><% } %>
+  </form>
+
+  <div class="inbox<%= thread ? ' inbox--thread' : '' %>">
+    <div class="inbox__list">
+      <% if (items.length) { %>
+        <ul class="inbox__items">
+          <% items.forEach((t) => { const current = thread && thread.id === t.id; const unread = t.unread > 0 && !current; %>
+            <li>
+              <a class="thread-item<%= unread ? ' is-unread' : '' %>" href="<%= threadLink(t.id) %>"<%- current ? ' aria-current="true"' : '' %>>
+                <span class="thread-item__top">
+                  <span class="thread-item__name"><%= t.name || 'Без имени' %></span>
+                  <% if (unread) { %><span class="unread-dot" title="Непрочитанные сообщения"><%= t.unread %></span><% } %>
+                  <span class="thread-item__time"><%= timeAgo(t.last_message_at) %></span>
+                </span>
+                <span class="thread-item__text"><%= t.last_direction === 'out' ? 'Вы: ' : '' %><%= t.subject && t.messages_count === 1 ? t.subject + ' — ' : '' %><%= t.last_text %></span>
+                <span class="thread-item__meta">
+                  <span class="<%= badgeClass('channel', t.channel) %>"><%= t.channel_label %></span>
+                  <span class="<%= badgeClass('feedback', t.status) %>"><%= t.status_label %></span>
+                </span>
+              </a>
+            </li>
+          <% }) %>
+        </ul>
+        <% if (pager.pages > 1) { %><%- include('../partials/pager') %><% } %>
+      <% } else { %>
+        <div class="empty">
+          <span class="empty__icon"><%- icon('chat', 22) %></span>
+          <span class="empty__title"><%= filters.status || filters.channel || filters.search ? 'Обращений с такими условиями нет' : 'Обращений пока нет' %></span>
+          <p>Сообщения из формы на сайте, из бота и мини-приложения появятся здесь.</p>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="inbox__chat">
+      <% if (thread) { %>
+        <div class="chat-head">
+          <div>
+            <a class="back-link" href="<%= listLink() %>" style="margin-bottom: var(--space-1)"><%- icon('left', 14) %> К списку</a>
+            <div class="chat-head__title"><%= thread.name || 'Без имени' %> <span class="muted" style="font-weight: 500">· обращение #<%= thread.id %></span></div>
+            <div class="chat-head__meta">
+              <span class="<%= badgeClass('channel', thread.channel) %>"><%= thread.channel_label %></span>
+              <span class="<%= badgeClass('feedback', thread.status) %>"><%= thread.status_label %></span>
+              <% if (thread.contact) { %><span><%= thread.contact %></span><% } %>
+              <% if (thread.subject) { %><span>Тема: <%= thread.subject %></span><% } %>
+              <% if (customer) { %><a href="/admin/customers/<%= customer.id %>">Профиль клиента</a><% } %>
+            </div>
+          </div>
+          <div class="btn-row">
+            <% if (thread.status !== 'closed') { %>
+              <form method="post" action="/admin/feedback/<%= thread.id %>/status<%= keepQuery %>"><%- csrfField %><input type="hidden" name="status" value="closed"><button class="btn btn--sm" type="submit"><%- icon('check', 14) %> Закрыть</button></form>
+            <% } else { %>
+              <form method="post" action="/admin/feedback/<%= thread.id %>/status<%= keepQuery %>"><%- csrfField %><input type="hidden" name="status" value="open"><button class="btn btn--sm" type="submit">Открыть снова</button></form>
+            <% } %>
+            <form method="post" action="/admin/feedback/<%= thread.id %>/delete<%= keepQuery %>" data-confirm="Удалить обращение #<%= thread.id %> вместе со всей перепиской?">
+              <%- csrfField %><button class="btn btn--sm btn--quiet btn--icon" type="submit" title="Удалить обращение" aria-label="Удалить обращение"><%- icon('trash', 15) %></button>
+            </form>
+          </div>
+        </div>
+
+        <div class="chat" data-scroll-bottom>
+          <% let lastDay = ''; thread.messages.forEach((m) => { const day = formatDate(m.created_at); %>
+            <% if (day !== lastDay) { lastDay = day; %><div class="chat-day"><%= day %></div><% } %>
+            <div class="msg msg--<%= m.direction %>">
+              <div class="msg__bubble"><%= m.text %></div>
+              <div class="msg__meta">
+                <% if (m.direction === 'in') { %><%= thread.name || 'Клиент' %> · <% } else { %><%= m.admin_name || (m.via === 'telegram' ? 'Из чата администраторов' : 'Команда') %> · <% } %><%= formatDateTime(m.created_at).split(', ').pop() %>
+                <% if (m.direction === 'out') { %>
+                  · <% if (m.delivered) { %>доставлено в Telegram<% } else if (thread.can_deliver) { %><span style="color: var(--color-danger)">не доставлено</span><% } else { %>сохранено<% } %>
+                <% } %>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+
+        <form class="reply-box" method="post" action="/admin/feedback/<%= thread.id %>/reply<%= keepQuery %>">
+          <%- csrfField %>
+          <% if (error) { %><div class="alert alert--error" role="alert" style="margin-bottom: var(--space-2)"><%- icon('alert', 16) %><span><%= error %></span></div><% } %>
+          <label class="visually-hidden" for="reply-text">Ответ</label>
+          <textarea class="textarea" id="reply-text" name="text" rows="3" maxlength="<%= maxLength %>" placeholder="Напишите ответ…" required data-submit-hotkey><%= draft %></textarea>
+          <div class="reply-box__row">
+            <span class="reply-box__hint">
+              <% if (!thread.can_deliver) { %>
+                <%- icon('info', 14) %> Обращение с сайта: ответ сохранится в истории, а клиенту напишите на <%= thread.contact || 'указанный контакт' %>.
+              <% } else if (!botEnabled) { %>
+                <%- icon('alert', 14) %> Бот не подключён — ответ сохранится, но не будет доставлен.
+              <% } else { %>
+                <%- icon('telegram', 14) %> Ответ придёт клиенту в Telegram от имени бота. Ctrl + Enter — отправить.
+              <% } %>
+            </span>
+            <button class="btn btn--primary" type="submit"><%- icon('send', 15) %> <%= thread.can_deliver ? 'Отправить' : 'Сохранить ответ' %></button>
+          </div>
+        </form>
+      <% } else { %>
+        <div class="empty" style="margin: auto">
+          <span class="empty__icon"><%- icon('chat', 22) %></span>
+          <span class="empty__title">Выберите обращение</span>
+          <p><%= counts.unread ? `Непрочитанных: ${counts.unread}. Откройте диалог слева, чтобы ответить.` : 'Откройте диалог слева, чтобы прочитать переписку и ответить.' %></p>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</section>
+<%- include('../partials/foot') %>

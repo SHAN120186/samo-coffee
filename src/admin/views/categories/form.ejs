@@ -1,0 +1,50 @@
+<%- include('../partials/head') %>
+<%
+  const action = isNew ? '/admin/categories' : `/admin/categories/${category.id}`;
+  const err = (name) => fields[name] ? `<span class="field__error">${escapeHtml(fields[name])}</span>` : '';
+  const inv = (name) => fields[name] ? ' field--invalid' : '';
+-%>
+<div class="page-head">
+  <div>
+    <a class="back-link" href="/admin/categories"><%- icon('left', 14) %> Все категории</a>
+    <h1><%= isNew ? 'Новая категория' : category.title %></h1>
+  </div>
+</div>
+<%- include('../partials/form-error') %>
+
+<form method="post" action="<%= action %>" novalidate style="max-width: 46rem">
+  <%- csrfField %>
+  <section class="panel">
+    <div class="panel__body form-grid">
+      <div class="field span-all<%- inv('title') %>">
+        <label class="field__label" for="c-title">Название <span class="req">*</span></label>
+        <input class="input" type="text" id="c-title" name="title" value="<%= category.title %>" maxlength="120" required>
+        <%- err('title') %>
+      </div>
+      <div class="field span-all">
+        <label class="field__label" for="c-description">Описание</label>
+        <textarea class="textarea" id="c-description" name="description" rows="3" maxlength="1000"><%= category.description %></textarea>
+      </div>
+      <div class="span-all">
+        <%- include('../partials/image-field', { name: 'image', value: category.image, label: 'Изображение', id: 'c-image', hint: 'Показывается в блоке категорий на главной', error: fields.image || null }) %>
+      </div>
+      <div class="field<%- inv('slug') %>">
+        <label class="field__label" for="c-slug">Адрес</label>
+        <input class="input" type="text" id="c-slug" name="slug" value="<%= category.slug %>" maxlength="120" placeholder="создастся из названия" autocomplete="off">
+        <%- err('slug') || '<span class="field__hint">Латиница, цифры и дефис</span>' %>
+      </div>
+      <div class="field">
+        <label class="field__label" for="c-sort">Порядок</label>
+        <input class="input input--num" type="text" inputmode="numeric" id="c-sort" name="sort" value="<%= category.sort %>" maxlength="5" style="max-width: 7rem">
+      </div>
+      <div class="span-all">
+        <label class="switch"><input type="checkbox" name="active" value="1"<%= category.active ? ' checked' : '' %>><span class="switch__track"></span><span>Показывать на сайте</span></label>
+      </div>
+    </div>
+  </section>
+  <div class="form-actions">
+    <button class="btn btn--primary" type="submit"><%- icon('check', 15) %> <%= isNew ? 'Создать категорию' : 'Сохранить' %></button>
+    <a class="btn btn--ghost" href="/admin/categories">Отмена</a>
+  </div>
+</form>
+<%- include('../partials/foot') %>

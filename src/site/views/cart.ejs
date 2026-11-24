@@ -1,0 +1,108 @@
+<%- include('partials/head', { bodyClass: 'page-cart' }) %>
+
+<main id="main">
+  <section class="page-hero page-hero--compact">
+    <div class="container">
+      <h1 class="page-hero__title"><%= c.title %></h1>
+<% if (cart.items.length) { -%>
+      <p class="muted" data-cart-text="count"><%= cart.count %> <%= plural(cart.count, ['товар', 'товара', 'товаров']) %></p>
+<% } -%>
+    </div>
+  </section>
+
+<% if (!cart.items.length) { -%>
+  <section class="section section--flush-top">
+    <div class="container">
+      <div class="empty" data-testid="cart-empty">
+        <img src="/img/placeholder.svg" alt="" width="160" height="160">
+        <h2 class="empty__title"><%= c.empty_title %></h2>
+        <p class="empty__text"><%= c.empty_text %></p>
+        <p class="empty__actions"><a class="btn btn--primary btn--lg" href="/catalog">Перейти в каталог<%- icon('arrow', { size: 18 }) %></a></p>
+      </div>
+<% if (suggestions.length) { -%>
+      <div class="pgrid pgrid--suggest">
+<% suggestions.forEach((p) => { -%>
+        <%- include('partials/product-card', { p, headingTag: 'h2' }) %>
+<% }) -%>
+      </div>
+<% } -%>
+    </div>
+  </section>
+<% } else { -%>
+  <section class="section section--flush-top">
+    <div class="container cart" data-cart>
+      <div class="cart__main">
+        <ul class="cart-lines">
+<% cart.items.forEach((item) => { -%>
+          <li class="cart-line<%= item.available ? '' : ' cart-line--unavailable' %>" data-cart-line="<%= item.product_id %>">
+            <a class="cart-line__media" href="<%= item.url %>" tabindex="-1" aria-hidden="true">
+              <img src="<%= item.image %>" alt="" width="160" height="160" loading="lazy">
+            </a>
+            <div class="cart-line__info">
+              <a class="cart-line__title" href="<%= item.url %>"><%= item.title %></a>
+<% if (item.subtitle) { -%>
+              <p class="cart-line__meta"><%= item.subtitle %></p>
+<% } -%>
+              <p class="cart-line__unit"><%= formatSum(item.price) %> за шт.</p>
+              <p class="cart-line__warn" data-line-warn<% if (item.available) { %> hidden<% } %>><%= item.stock > 0 ? `В наличии только ${item.stock} шт.` : 'Товар закончился' %></p>
+            </div>
+            <form class="cart-line__qty" method="post" action="/cart/update" data-cart-update>
+              <%- csrfField %>
+              <input type="hidden" name="product_id" value="<%= item.product_id %>">
+              <div class="qty qty--sm" data-qty>
+                <button class="qty__btn" type="button" data-qty-dec aria-label="Уменьшить количество"><%- icon('minus', { size: 16 }) %></button>
+                <label class="visually-hidden" for="qty-<%= item.product_id %>">Количество: <%= item.title %></label>
+                <input class="qty__input" id="qty-<%= item.product_id %>" type="number" name="qty" value="<%= item.qty %>" min="1" max="<%= Math.max(1, Math.min(item.stock, maxQty)) %>" step="1" inputmode="numeric">
+                <button class="qty__btn" type="button" data-qty-inc aria-label="Увеличить количество"><%- icon('plus', { size: 16 }) %></button>
+              </div>
+              <button class="btn btn--sm no-js" type="submit">Обновить</button>
+            </form>
+            <p class="cart-line__total price" data-line-total><%= formatSum(item.line_total) %></p>
+            <form class="cart-line__remove" method="post" action="/cart/remove" data-cart-remove>
+              <%- csrfField %>
+              <input type="hidden" name="product_id" value="<%= item.product_id %>">
+              <button class="icon-btn icon-btn--quiet" type="submit" aria-label="Убрать «<%= item.title %>» из корзины"><%- icon('trash', { size: 18 }) %></button>
+            </form>
+          </li>
+<% }) -%>
+        </ul>
+        <div class="cart__below">
+          <a class="link-arrow link-arrow--back" href="/catalog"><%- icon('arrow-left', { size: 18 }) %>Продолжить покупки</a>
+          <form method="post" action="/cart/clear">
+            <%- csrfField %>
+            <button class="btn-link" type="submit">Очистить корзину</button>
+          </form>
+        </div>
+      </div>
+
+      <aside class="summary" aria-label="Итого по заказу">
+        <h2 class="summary__title">Ваш заказ</h2>
+<% if (freeFrom > 0) { const progress = Math.min(100, Math.round((cart.subtotal / freeFrom) * 100)); -%>
+        <div class="freebar" data-freebar data-free-from="<%= freeFrom %>">
+          <p class="freebar__text" data-freebar-text>
+<% if (cart.free_delivery_left > 0) { -%>
+            До бесплатной доставки — <strong><%= formatSum(cart.free_delivery_left) %></strong>
+<% } else { -%>
+            <strong>Доставка по Ташкенту — бесплатно</strong>
+<% } -%>
+          </p>
+          <div class="freebar__track" role="presentation"><span data-freebar-fill style="width: <%= progress %>%"></span></div>
+        </div>
+<% } -%>
+        <dl class="summary__rows">
+          <div class="summary__row"><dt>Товары</dt><dd data-cart-text="subtotal"><%= formatSum(cart.subtotal) %></dd></div>
+          <div class="summary__row"><dt>Доставка курьером</dt><dd data-cart-text="delivery"><%= cart.delivery_fee ? formatSum(cart.delivery_fee) : 'Бесплатно' %></dd></div>
+          <div class="summary__row summary__row--total"><dt>Итого</dt><dd data-cart-text="total" data-testid="cart-total"><%= formatSum(cart.total) %></dd></div>
+        </dl>
+        <p class="alert alert--warning summary__alert" data-cart-unavailable<% if (!cart.has_unavailable) { %> hidden<% } %>>Часть товаров закончилась — уменьшите количество, чтобы оформить заказ.</p>
+        <a class="btn btn--primary btn--lg btn--block" href="/checkout" data-checkout-link data-testid="go-checkout"<% if (cart.has_unavailable) { %> aria-disabled="true"<% } %>>Оформить заказ<%- icon('arrow', { size: 18 }) %></a>
+<% if (c.note) { -%>
+        <p class="summary__note"><%= c.note %></p>
+<% } -%>
+      </aside>
+    </div>
+  </section>
+<% } -%>
+</main>
+
+<%- include('partials/foot') %>

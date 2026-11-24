@@ -1,0 +1,76 @@
+<%- include('partials/head', { bodyClass: 'page-checkout' }) %>
+<% const errorList = Object.values(errors); -%>
+
+<main id="main">
+  <section class="page-hero page-hero--compact">
+    <div class="container">
+      <a class="link-arrow link-arrow--back" href="/subscriptions"><%- icon('arrow-left', { size: 18 }) %>Все планы подписки</a>
+      <h1 class="page-hero__title"><%= c.checkout_title %></h1>
+<% if (c.checkout_text) { -%>
+      <p class="lead"><%= c.checkout_text %></p>
+<% } -%>
+    </div>
+  </section>
+
+  <section class="section section--flush-top">
+    <div class="container checkout">
+      <form class="checkout__form" method="post" action="/subscriptions/<%= plan.slug %>" novalidate>
+        <%- csrfField %>
+<% if (errorList.length) { -%>
+        <div class="alert alert--error" role="alert" data-testid="checkout-errors">
+          <strong>Проверьте форму:</strong> <%= errorList.join('. ') %>.
+        </div>
+<% } -%>
+
+        <fieldset class="form-section">
+          <legend><span class="form-section__num">1</span>Контактные данные</legend>
+          <div class="form-grid">
+            <%- include('partials/field', { name: 'name', label: 'Имя', value: values.name, error: errors.name, autocomplete: 'name', required: true, maxlength: 120, placeholder: 'Как к вам обращаться' }) %>
+            <%- include('partials/field', { name: 'phone', label: 'Телефон', type: 'tel', value: values.phone, error: errors.phone, autocomplete: 'tel', inputmode: 'tel', required: true, maxlength: 40, placeholder: '+998 90 123 45 67' }) %>
+            <%- include('partials/field', { name: 'email', label: 'E-mail', type: 'email', value: values.email, error: errors.email, autocomplete: 'email', maxlength: 160, placeholder: 'you@example.com', wide: true }) %>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-section">
+          <legend><span class="form-section__num">2</span>Доставка</legend>
+          <div class="form-grid">
+            <%- include('partials/field', { name: 'address', label: 'Адрес доставки', value: values.address, error: errors.address, autocomplete: 'street-address', maxlength: 300, placeholder: 'Улица, дом, квартира, ориентир', hint: 'Можно уточнить позже с менеджером. Доставка по подписке — бесплатно.', wide: true }) %>
+            <%- include('partials/field', { name: 'comment', label: 'Пожелания', type: 'textarea', value: values.comment, error: errors.comment, maxlength: 1000, rows: 3, placeholder: 'Любимый лот, помол, удобные дни доставки…', wide: true }) %>
+          </div>
+        </fieldset>
+
+        <div class="checkout__submit">
+          <button class="btn btn--primary btn--lg" type="submit" data-testid="place-order">Перейти к оплате · <%= formatSum(plan.price) %></button>
+<% if (agreement) { -%>
+          <p class="checkout__agreement"><%= agreement %></p>
+<% } -%>
+        </div>
+      </form>
+
+      <aside class="summary summary--plan" aria-label="Выбранный план">
+        <img class="summary__cover" src="<%= plan.image %>" alt="" width="800" height="600">
+        <p class="eyebrow">Подписка</p>
+        <h2 class="summary__title"><%= plan.title %></h2>
+<% if (plan.description) { -%>
+        <p class="summary__desc"><%= plan.description %></p>
+<% } -%>
+<% if (plan.perks.length) { -%>
+        <ul class="plan__perks">
+<% plan.perks.forEach((perk) => { -%>
+          <li><%- icon('check', { size: 18 }) %><span><%= perk %></span></li>
+<% }) -%>
+        </ul>
+<% } -%>
+        <dl class="summary__rows">
+          <div class="summary__row"><dt>Доставка</dt><dd>Бесплатно</dd></div>
+          <div class="summary__row summary__row--total"><dt>К оплате <%= periodLabel(plan.period_days) %></dt><dd data-testid="checkout-total"><%= formatSum(plan.price) %></dd></div>
+        </dl>
+<% if (c.note) { -%>
+        <p class="summary__note"><%= c.note %></p>
+<% } -%>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<%- include('partials/foot') %>

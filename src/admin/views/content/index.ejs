@@ -1,0 +1,25 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Страницы сайта</h1>
+    <p class="page-head__sub">Тексты и изображения всех страниц. Изменения появляются на сайте сразу после сохранения. Товары, статьи блога и ответы на вопросы редактируются в своих разделах.</p>
+  </div>
+</div>
+
+<% if (pages.length) { %>
+  <div class="page-cards">
+    <% pages.forEach((p) => { %>
+      <div class="page-card">
+        <a class="page-card__title" href="/admin/content/<%= p.page %>"><%- icon(p.page === 'global' ? 'globe' : p.page === 'tma' ? 'telegram' : 'layout', 18) %> <%= p.title %></a>
+        <div class="page-card__meta"><%= p.blocks %> <%= plural(p.blocks, ['блок', 'блока', 'блоков']) %><% if (p.hint) { %> · <%= p.hint %><% } %></div>
+        <div class="page-card__actions">
+          <a class="btn btn--sm" href="/admin/content/<%= p.page %>"><%- icon('edit', 14) %> Редактировать</a>
+          <% if (p.url) { %><a class="panel__link" href="<%= p.url %>" target="_blank" rel="noopener" style="white-space: nowrap">На сайте <%- icon('external', 13) %></a><% } %>
+        </div>
+      </div>
+    <% }) %>
+  </div>
+<% } else { %>
+  <div class="panel"><div class="empty"><span class="empty__icon"><%- icon('layout', 22) %></span><span class="empty__title">Блоков контента пока нет</span><p>Они создаются автоматически при первом запуске сайта.</p></div></div>
+<% } %>
+<%- include('../partials/foot') %>

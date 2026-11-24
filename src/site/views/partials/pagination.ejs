@@ -1,0 +1,19 @@
+<% if (pager.pages > 1) { -%>
+<nav class="pager" aria-label="Страницы">
+<% if (pager.page > 1) { -%>
+  <a class="pager__item pager__item--nav" href="<%= pageUrl(pager.page - 1) %>" rel="prev" aria-label="Предыдущая страница"><%- icon('arrow-left', { size: 18 }) %></a>
+<% } -%>
+<% pager.items.forEach((n) => { -%>
+<% if (n === null) { -%>
+  <span class="pager__gap" aria-hidden="true">…</span>
+<% } else if (n === pager.page) { -%>
+  <span class="pager__item is-active" aria-current="page"><%= n %></span>
+<% } else { -%>
+  <a class="pager__item" href="<%= pageUrl(n) %>" aria-label="Страница <%= n %>"><%= n %></a>
+<% } -%>
+<% }) -%>
+<% if (pager.page < pager.pages) { -%>
+  <a class="pager__item pager__item--nav" href="<%= pageUrl(pager.page + 1) %>" rel="next" aria-label="Следующая страница"><%- icon('arrow', { size: 18 }) %></a>
+<% } -%>
+</nav>
+<% } -%>

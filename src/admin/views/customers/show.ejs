@@ -1,0 +1,118 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <a class="back-link" href="/admin/customers"><%- icon('left', 14) %> Все клиенты</a>
+    <h1><%= customer.name || `Клиент #${customer.id}` %></h1>
+    <p class="page-head__sub status-line">
+      <span class="<%= badgeClass('channel', customer.source) %>"><%= sourceLabels[customer.source] || customer.source %></span>
+      <span>клиент с <%= formatDate(customer.created_at) %></span>
+      <% if (customer.tg_username) { %><a href="https://t.me/<%= customer.tg_username %>" target="_blank" rel="noopener">@<%= customer.tg_username %></a><% } %>
+    </p>
+  </div>
+</div>
+<%- include('../partials/form-error') %>
+
+<section class="kpis" aria-label="Показатели клиента">
+  <div class="kpi"><div class="kpi__label">Заказов</div><div class="kpi__value"><%= stats.orders_count %> <small>оплачено <%= stats.paid_count %></small></div></div>
+  <div class="kpi"><div class="kpi__label">Оплачено всего</div><div class="kpi__value"><%= formatNumber(stats.paid_total) %> <small>сум</small></div></div>
+  <div class="kpi"><div class="kpi__label">Средний чек</div><div class="kpi__value"><%= formatNumber(stats.avg_check) %> <small>сум</small></div></div>
+  <div class="kpi"><div class="kpi__label">Последний заказ</div><div class="kpi__value" style="font-size: 1.25rem; line-height: 1.6"><%= stats.last_order_at ? formatDate(stats.last_order_at) : '—' %></div></div>
+</section>
+
+<div class="cols cols--main">
+  <div class="stack-4">
+    <section class="panel">
+      <div class="panel__head"><h2>История заказов</h2><span class="muted"><%= orders.total %></span></div>
+      <% if (orders.items.length) { %>
+        <div class="table-wrap">
+          <table class="table table--compact">
+            <thead><tr><th>Заказ</th><th>Тип</th><th>Канал</th><th>Статус</th><th>Оплата</th><th class="num">Сумма</th></tr></thead>
+            <tbody>
+              <% orders.items.forEach((o) => { %>
+                <tr>
+                  <td class="t-nowrap"><a class="t-main" href="/admin/orders/<%= o.id %>"><%= o.number %></a><span class="t-sub"><%= formatDateTime(o.created_at) %></span></td>
+                  <td><%= o.kind_label %></td>
+                  <td><span class="<%= badgeClass('channel', o.channel) %>"><%= o.channel_label %></span></td>
+                  <td><span class="<%= badgeClass('order', o.status) %>"><%= o.status_label %></span></td>
+                  <td><span class="<%= badgeClass('payment', o.payment_status) %>"><%= o.payment_status_label %></span></td>
+                  <td class="num"><%= formatSum(o.total) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } else { %>
+        <div class="empty empty--sm"><span class="empty__title">Заказов нет</span></div>
+      <% } %>
+    </section>
+
+    <% if (subs.length) { %>
+      <section class="panel">
+        <div class="panel__head"><h2>Подписки</h2></div>
+        <div class="table-wrap">
+          <table class="table table--compact">
+            <thead><tr><th>План</th><th>Статус</th><th>Начало</th><th>Оплачено до</th><th class="num">Продлений</th></tr></thead>
+            <tbody>
+              <% subs.forEach((s) => { %>
+                <tr>
+                  <td class="t-main"><%= s.plan_title %></td>
+                  <td><span class="<%= badgeClass('subscription', s.status) %>"><%= s.status_label %></span></td>
+                  <td><%= formatDateShort(s.started_at) %></td>
+                  <td><%= formatDateShort(s.current_period_end) %></td>
+                  <td class="num"><%= s.renewals %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    <% } %>
+
+    <% if (threads.length) { %>
+      <section class="panel">
+        <div class="panel__head"><h2>Обращения</h2></div>
+        <ul class="feed">
+          <% threads.forEach((t) => { %>
+            <li>
+              <div class="feed__body">
+                <div class="feed__title"><a href="/admin/feedback/<%= t.id %>">Обращение #<%= t.id %></a><span class="<%= badgeClass('feedback', t.status) %>"><%= t.status_label %></span><span class="<%= badgeClass('channel', t.channel) %>"><%= t.channel_label %></span></div>
+                <div class="feed__text"><%= t.last_text %></div>
+              </div>
+              <span class="feed__time"><%= timeAgo(t.last_message_at) %></span>
+            </li>
+          <% }) %>
+        </ul>
+      </section>
+    <% } %>
+  </div>
+
+  <section class="panel">
+    <div class="panel__head"><h2>Данные клиента</h2></div>
+    <form class="panel__body stack-4" method="post" action="/admin/customers/<%= customer.id %>" novalidate>
+      <%- csrfField %>
+      <div class="field">
+        <label class="field__label" for="cu-name">Имя</label>
+        <input class="input" type="text" id="cu-name" name="name" value="<%= form.name %>" maxlength="120">
+      </div>
+      <div class="field">
+        <label class="field__label" for="cu-phone">Телефон</label>
+        <input class="input" type="tel" id="cu-phone" name="phone" value="<%= form.phone === customer.phone ? formatPhone(form.phone) : (form.phone || '') %>" maxlength="30" placeholder="+998 90 123 45 67">
+      </div>
+      <div class="field">
+        <label class="field__label" for="cu-email">E-mail</label>
+        <input class="input" type="email" id="cu-email" name="email" value="<%= form.email || '' %>" maxlength="160">
+      </div>
+      <div class="field">
+        <label class="field__label" for="cu-address">Адрес доставки</label>
+        <input class="input" type="text" id="cu-address" name="address" value="<%= form.address %>" maxlength="300">
+      </div>
+      <div class="field">
+        <label class="field__label" for="cu-notes">Заметки</label>
+        <textarea class="textarea" id="cu-notes" name="notes" rows="4" maxlength="2000" placeholder="Предпочтения, договорённости — видно только команде"><%= form.notes %></textarea>
+      </div>
+      <button class="btn btn--primary" type="submit">Сохранить</button>
+      <% if (customer.tg_user_id) { %><p class="help" style="margin: 0">Telegram ID: <code><%= customer.tg_user_id %></code> — уведомления о заказах приходят клиенту в бот.</p><% } %>
+    </form>
+  </section>
+</div>
+<%- include('../partials/foot') %>

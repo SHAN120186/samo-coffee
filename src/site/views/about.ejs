@@ -1,0 +1,59 @@
+<%- include('partials/head', { bodyClass: 'page-about' }) %>
+
+<main id="main">
+  <section class="page-hero page-hero--center">
+    <div class="container container--narrow">
+<% if (settings.site_tagline) { -%>
+      <p class="eyebrow"><%= settings.site_tagline %></p>
+<% } -%>
+      <h1 class="page-hero__title page-hero__title--xl"><%= c.title %></h1>
+<% if (c.lead) { -%>
+      <p class="lead about__lead"><%= c.lead %></p>
+<% } -%>
+    </div>
+  </section>
+
+<% if (c.image) { -%>
+  <div class="container">
+    <div class="about__cover" data-reveal>
+      <img src="<%= c.image %>" alt="" width="1200" height="800" fetchpriority="high">
+    </div>
+  </div>
+<% } -%>
+
+<% if (facts.length) { -%>
+  <section class="section section--tight" aria-label="Samo в цифрах">
+    <div class="container">
+      <dl class="facts">
+<% facts.forEach((fact) => { -%>
+        <div class="facts__item" data-reveal>
+          <dt class="facts__value"><%= fact.value %></dt>
+          <dd class="facts__label"><%= fact.label %></dd>
+        </div>
+<% }) -%>
+      </dl>
+    </div>
+  </section>
+<% } -%>
+
+  <section class="section section--flush-top">
+    <div class="container about__body">
+      <article class="prose" data-reveal><%- c.body %></article>
+<% if (c.quote) { -%>
+      <aside class="pullquote" data-reveal>
+        <span class="pullquote__mark" aria-hidden="true">“</span>
+        <blockquote><p><%= c.quote %></p></blockquote>
+<% if (c.quote_author) { -%>
+        <p class="pullquote__author"><%= c.quote_author %></p>
+<% } -%>
+      </aside>
+<% } -%>
+    </div>
+  </section>
+
+<% if (c.cta_title) { -%>
+  <%- include('partials/cta-band', { title: c.cta_title, text: c.cta_text, buttonText: c.cta_button_text, buttonLink: c.cta_button_link, tone: 'dark' }) %>
+<% } -%>
+</main>
+
+<%- include('partials/foot') %>

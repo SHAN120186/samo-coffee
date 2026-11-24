@@ -1,0 +1,92 @@
+<%- include('partials/head', { bodyClass: 'page-contacts' }) %>
+<% const phoneHref = telHref(settings.phone); const hasErrors = Object.keys(errors).length > 0; -%>
+
+<main id="main">
+  <section class="page-hero">
+    <div class="container">
+      <h1 class="page-hero__title"><%= c.title %></h1>
+<% if (c.intro) { -%>
+      <p class="lead"><%= c.intro %></p>
+<% } -%>
+    </div>
+  </section>
+
+  <section class="section section--flush-top">
+    <div class="container contacts">
+      <div class="contacts__info">
+<% if (c.image) { -%>
+        <img class="contacts__img" src="<%= c.image %>" alt="" width="1000" height="760" fetchpriority="high">
+<% } -%>
+<% if (c.info_title) { -%>
+        <h2 class="contacts__title"><%= c.info_title %></h2>
+<% } -%>
+        <ul class="contact-list">
+<% if (settings.address) { -%>
+          <li>
+            <span class="contact-list__icon" aria-hidden="true"><%- icon('pin', { size: 20 }) %></span>
+            <span><small>Адрес</small><span><%= settings.address %></span><% if (settings.map_url) { %><a class="contact-list__more" href="<%= settings.map_url %>" target="_blank" rel="noopener"><%= c.map_button_text || 'Открыть на карте' %></a><% } %></span>
+          </li>
+<% } -%>
+<% if (settings.phone) { -%>
+          <li>
+            <span class="contact-list__icon" aria-hidden="true"><%- icon('phone', { size: 20 }) %></span>
+            <span><small>Телефон</small><a href="<%= phoneHref %>"><%= settings.phone %></a></span>
+          </li>
+<% } -%>
+<% if (settings.email) { -%>
+          <li>
+            <span class="contact-list__icon" aria-hidden="true"><%- icon('mail', { size: 20 }) %></span>
+            <span><small>E-mail</small><a href="mailto:<%= settings.email %>"><%= settings.email %></a></span>
+          </li>
+<% } -%>
+<% if (settings.work_hours) { -%>
+          <li>
+            <span class="contact-list__icon" aria-hidden="true"><%- icon('clock', { size: 20 }) %></span>
+            <span><small>Часы работы</small><span><%= settings.work_hours %></span></span>
+          </li>
+<% } -%>
+        </ul>
+<% if (socials.length || tgLink) { -%>
+        <ul class="social-row">
+<% if (tgLink) { -%>
+          <li><a class="btn btn--dark" href="<%= tgLink %>" target="_blank" rel="noopener"><%- icon('telegram', { size: 18 }) %><%= g.tg_button_text || 'Открыть в Telegram' %></a></li>
+<% } -%>
+<% socials.forEach((s) => { -%>
+          <li><a class="btn btn--ghost" href="<%= s.url %>" target="_blank" rel="noopener"><%- icon(s.icon, { size: 18 }) %><%= s.name %></a></li>
+<% }) -%>
+        </ul>
+<% } -%>
+      </div>
+
+      <div class="contacts__form-wrap" id="form">
+        <form class="form-card" method="post" action="/contacts#form" novalidate data-testid="feedback-form">
+          <%- csrfField %>
+          <h2 class="form-card__title"><%= c.form_title %></h2>
+<% if (c.form_text) { -%>
+          <p class="form-card__text"><%= c.form_text %></p>
+<% } -%>
+<% if (hasErrors) { -%>
+          <div class="alert alert--error" role="alert">Проверьте выделенные поля — и попробуйте ещё раз.</div>
+<% } -%>
+          <div class="form-grid">
+            <%- include('partials/field', { name: 'name', label: 'Ваше имя', value: values.name, error: errors.name, autocomplete: 'name', required: true, maxlength: 120 }) %>
+            <%- include('partials/field', { name: 'contact', label: 'Телефон, e-mail или Telegram', value: values.contact, error: errors.contact, required: true, maxlength: 160, placeholder: '+998 90 123 45 67' }) %>
+            <%- include('partials/field', { name: 'subject', label: 'Тема', value: values.subject, error: errors.subject, maxlength: 200, placeholder: 'Например, опт для кофейни', wide: true }) %>
+            <%- include('partials/field', { name: 'message', label: 'Сообщение', type: 'textarea', value: values.message, error: errors.message, required: true, maxlength: 4000, rows: 5, wide: true }) %>
+          </div>
+          <div class="hp" aria-hidden="true">
+            <label for="f-extra">Не заполняйте это поле</label>
+            <input id="f-extra" type="text" name="extra_info" tabindex="-1" autocomplete="off">
+          </div>
+          <button class="btn btn--primary btn--lg" type="submit" data-testid="feedback-submit">Отправить сообщение<%- icon('arrow', { size: 18 }) %></button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+<% if (c.wholesale_title) { -%>
+  <%- include('partials/cta-band', { title: c.wholesale_title, text: c.wholesale_text, buttonText: 'Обсудить поставки', buttonLink: '#form', tone: 'dark' }) %>
+<% } -%>
+</main>
+
+<%- include('partials/foot') %>

@@ -1,0 +1,75 @@
+<%
+  const _items = nav.flatMap((g) => g.items);
+  const _current = _items.find((i) => i.id === section) || null;
+  const _initials = (admin.name || admin.email || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('');
+-%>
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="csrf-token" content="<%= csrfToken %>">
+  <title><%= title %> — Админ-панель <%= settings.site_name %></title>
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/tokens.css?v=<%= assetV %>">
+  <link rel="stylesheet" href="/admin/css/admin.css?v=<%= assetV %>">
+</head>
+<body class="adm">
+<a class="skip-link" href="#main">Перейти к содержимому</a>
+<div class="adm-shell">
+  <aside class="adm-sidebar" id="adm-sidebar" aria-label="Разделы админ-панели">
+    <a class="adm-brand" href="/admin" aria-label="<%= settings.site_name %> — админ-панель">
+      <img src="/img/logo-light.svg" alt="<%= settings.site_name %>" width="120" height="28">
+      <span class="adm-brand__tag">Admin</span>
+    </a>
+    <nav class="adm-nav">
+      <% nav.forEach((group) => { %>
+        <div class="adm-nav__group">
+          <p class="adm-nav__title"><%= group.title %></p>
+          <% group.items.forEach((item) => { const count = item.count ? navCounts[item.count] : 0; %>
+            <a class="adm-nav__link" href="<%= item.href %>"<%- item.id === section ? ' aria-current="page"' : '' %>>
+              <%- icon(item.icon) %>
+              <span><%= item.title %></span>
+              <% if (count) { %><span class="adm-nav__count" title="<%= item.count === 'orders' ? 'Оплачены и ждут обработки' : 'Непрочитанные обращения' %>"><%= count > 99 ? '99+' : count %></span><% } %>
+            </a>
+          <% }) %>
+        </div>
+      <% }) %>
+    </nav>
+    <div class="adm-sidebar__foot">
+      <div class="adm-status"><span class="dot <%= botEnabled ? 'dot--on' : '' %>"></span><span>Бот <%= botEnabled ? (appConfig.botUsername ? '@' + appConfig.botUsername : 'подключён') : 'не подключён' %></span></div>
+      <div class="adm-status"><span class="dot <%= paymentLive ? 'dot--on' : 'dot--warn' %>"></span><span>Оплата: <%= paymentTitle %></span></div>
+    </div>
+  </aside>
+
+  <div class="adm-main">
+    <header class="adm-topbar">
+      <button class="btn btn--quiet btn--icon adm-burger" type="button" data-sidebar-toggle aria-controls="adm-sidebar" aria-expanded="false" aria-label="Меню"><%- icon('menu') %></button>
+      <div class="adm-topbar__crumbs">
+        <% if (_current && _current.title !== title) { %>
+          <a href="<%= _current.href %>"><%= _current.title %></a><span class="sep">/</span>
+        <% } %>
+        <strong><%= title %></strong>
+      </div>
+      <div class="adm-topbar__right">
+        <a class="btn btn--quiet btn--sm" href="/" target="_blank" rel="noopener"><%- icon('external', 15) %> Открыть сайт</a>
+        <a class="adm-user" href="/admin/account" title="Мой аккаунт">
+          <span class="adm-user__avatar"><%= _initials %></span>
+          <span><span class="adm-user__name"><%= admin.name || admin.email %></span><span class="adm-user__role"><%= admin.role_label %></span></span>
+        </a>
+        <form method="post" action="/admin/logout">
+          <%- csrfField %>
+          <button class="btn btn--quiet btn--icon" type="submit" title="Выйти" aria-label="Выйти"><%- icon('logout') %></button>
+        </form>
+      </div>
+    </header>
+
+    <main class="adm-content" id="main">
+      <% const _flash = flash; if (_flash.length) { %>
+        <div class="flashes" role="status">
+          <% _flash.forEach((f) => { %>
+            <div class="alert alert--<%= f.type %>"><%- icon(f.type === 'success' ? 'check' : f.type === 'error' ? 'alert' : 'info', 16) %><span><%= f.message %></span></div>
+          <% }) %>
+        </div>
+      <% } %>

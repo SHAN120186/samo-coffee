@@ -1,0 +1,24 @@
+<%#
+  One labelled form field. Locals: name, label, value, error, type ('text' | 'tel' | 'email' | 'textarea'),
+  placeholder, autocomplete, required, hint, rows, inputmode, maxlength, id
+%>
+<%
+  const fieldId = locals.id || `f-${name}`;
+  const fieldType = locals.type || 'text';
+  const fieldError = locals.error || '';
+  const describedBy = [fieldError ? `${fieldId}-error` : '', locals.hint ? `${fieldId}-hint` : ''].filter(Boolean).join(' ');
+-%>
+<div class="field<%= fieldError ? ' field--invalid' : '' %><%= locals.wide ? ' field--wide' : '' %>">
+  <label class="field__label" for="<%= fieldId %>"><%= label %><% if (!locals.required) { %> <span class="field__optional">необязательно</span><% } %></label>
+<% if (fieldType === 'textarea') { -%>
+  <textarea class="textarea" id="<%= fieldId %>" name="<%= name %>" rows="<%= locals.rows || 4 %>"<% if (locals.placeholder) { %> placeholder="<%= placeholder %>"<% } %><% if (locals.maxlength) { %> maxlength="<%= maxlength %>"<% } %><% if (locals.required) { %> required<% } %><% if (fieldError) { %> aria-invalid="true"<% } %><% if (describedBy) { %> aria-describedby="<%= describedBy %>"<% } %>><%= locals.value || '' %></textarea>
+<% } else { -%>
+  <input class="input" id="<%= fieldId %>" type="<%= fieldType %>" name="<%= name %>" value="<%= locals.value || '' %>"<% if (locals.placeholder) { %> placeholder="<%= placeholder %>"<% } %><% if (locals.autocomplete) { %> autocomplete="<%= autocomplete %>"<% } %><% if (locals.inputmode) { %> inputmode="<%= inputmode %>"<% } %><% if (locals.maxlength) { %> maxlength="<%= maxlength %>"<% } %><% if (locals.required) { %> required<% } %><% if (fieldError) { %> aria-invalid="true"<% } %><% if (describedBy) { %> aria-describedby="<%= describedBy %>"<% } %>>
+<% } -%>
+<% if (locals.hint) { -%>
+  <p class="field__hint" id="<%= fieldId %>-hint"><%= hint %></p>
+<% } -%>
+<% if (fieldError) { -%>
+  <p class="field__error" id="<%= fieldId %>-error"><%= fieldError %></p>
+<% } -%>
+</div>

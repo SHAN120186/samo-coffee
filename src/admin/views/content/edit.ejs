@@ -1,0 +1,68 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <a class="back-link" href="/admin/content"><%- icon('left', 14) %> Все страницы</a>
+    <h1><%= pageTitle %></h1>
+    <p class="page-head__sub"><%= hint || 'Тексты и изображения страницы. Пустое текстовое поле скрывает элемент на сайте.' %></p>
+  </div>
+  <div class="page-head__actions">
+    <% if (pageUrl) { %><a class="btn" href="<%= pageUrl %>" target="_blank" rel="noopener"><%- icon('external', 15) %> Открыть на сайте</a><% } %>
+  </div>
+</div>
+<%- include('../partials/form-error') %>
+
+<form method="post" action="/admin/content/<%= page %>" data-guard>
+  <%- csrfField %>
+  <div class="cols <%= groups.length > 3 ? 'cols--main' : '' %>">
+    <div class="stack-4">
+      <% groups.forEach((group, gi) => { %>
+        <section class="panel block-group" id="group-<%= gi %>">
+          <div class="panel__head"><h2><%= group.title %></h2></div>
+          <div class="panel__body stack-4">
+            <% group.blocks.forEach((block) => { const fieldId = `block-${block.key}`; %>
+              <% if (block.type === 'image') { %>
+                <%- include('../partials/image-field', { name: `blocks[${block.key}]`, value: block.value, label: block.short_label, id: fieldId, hint: 'JPG, PNG, WebP, GIF или AVIF. Можно перетащить файл прямо на поле.', error: null }) %>
+              <% } else if (block.type === 'richtext') { %>
+                <div class="field">
+                  <label class="field__label" for="<%= fieldId %>"><%= block.short_label %></label>
+                  <%- include('../partials/editor', { name: `blocks[${block.key}]`, value: block.value, id: fieldId, tall: false, placeholder: '' }) %>
+                </div>
+              <% } else if (block.type === 'link') { %>
+                <div class="field">
+                  <label class="field__label" for="<%= fieldId %>"><%= block.short_label %></label>
+                  <input class="input" type="text" id="<%= fieldId %>" name="blocks[<%= block.key %>]" value="<%= block.value %>" placeholder="/catalog или https://…" maxlength="1000">
+                  <span class="field__hint">Адрес внутри сайта («/catalog») или полная ссылка («https://…»)</span>
+                </div>
+              <% } else {
+                const isShort = /(^|_)(title|eyebrow|value|label|author|role)$/.test(block.key) || /(cta\d*|button|link)_text$/.test(block.key) || block.key === 'seo_title';
+                const long = block.value.length > 90 || block.value.includes('\n') || (!isShort && /(^|_)(text|description|intro|lead|note|about|quote|announcement|agreement|success)$/.test(block.key));
+              %>
+                <div class="field">
+                  <label class="field__label" for="<%= fieldId %>"><%= block.short_label %></label>
+                  <% if (long) { %>
+                    <textarea class="textarea" id="<%= fieldId %>" name="blocks[<%= block.key %>]" rows="<%= Math.min(8, Math.max(2, Math.ceil(block.value.length / 95))) %>" maxlength="20000" style="min-height: 0"><%= block.value %></textarea>
+                  <% } else { %>
+                    <input class="input" type="text" id="<%= fieldId %>" name="blocks[<%= block.key %>]" value="<%= block.value %>" maxlength="2000">
+                  <% } %>
+                  <% if (/^seo_/.test(block.key)) { %><span class="field__hint"><%= block.key === 'seo_title' ? 'Заголовок вкладки браузера и результата поиска, до 60–70 символов' : 'Описание под ссылкой в поиске, до 160 символов' %></span><% } %>
+                </div>
+              <% } %>
+            <% }) %>
+          </div>
+        </section>
+      <% }) %>
+    </div>
+    <% if (groups.length > 3) { %>
+      <aside class="panel block-nav" aria-label="Разделы страницы">
+        <% groups.forEach((group, gi) => { %><a href="#group-<%= gi %>"><%= group.title %></a><% }) %>
+      </aside>
+    <% } %>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn btn--primary" type="submit"><%- icon('check', 15) %> Сохранить изменения</button>
+    <a class="btn btn--ghost" href="/admin/content">Отмена</a>
+    <span class="form-actions__note"><%= total %> <%= plural(total, ['блок', 'блока', 'блоков']) %> на странице</span>
+  </div>
+</form>
+<%- include('../partials/foot', { scripts: ['/admin/js/editor.js'] }) %>

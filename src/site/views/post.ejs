@@ -1,0 +1,55 @@
+<%- include('partials/head', { bodyClass: 'page-post' }) %>
+
+<main id="main">
+  <article class="article">
+    <header class="article__head">
+      <div class="container container--narrow">
+        <%- include('partials/breadcrumbs', { crumbs: crumbs.slice(0, 2).concat([{ href: post.url, label: 'Статья' }]) }) %>
+        <h1 class="article__title"><%= post.title %></h1>
+<% if (post.excerpt) { -%>
+        <p class="lead article__lead"><%= post.excerpt %></p>
+<% } -%>
+        <p class="article__meta">
+<% if (post.author) { -%>
+          <span class="article__avatar" aria-hidden="true"><%= post.author.trim().charAt(0) %></span>
+          <span><%= post.author %></span>
+          <span aria-hidden="true">·</span>
+<% } -%>
+          <time datetime="<%= isoDate(published) %>"><%= formatDate(published) %></time>
+          <span aria-hidden="true">·</span>
+          <span><%= post.reading_min %> мин чтения</span>
+        </p>
+      </div>
+    </header>
+
+    <div class="container article__cover-wrap">
+      <img class="article__cover" src="<%= post.cover %>" alt="" width="1200" height="750" fetchpriority="high">
+    </div>
+
+    <div class="container container--narrow">
+      <div class="prose article__body"><%- post.body_html %></div>
+      <p class="article__back"><a class="link-arrow link-arrow--back" href="/blog"><%- icon('arrow-left', { size: 18 }) %>Все статьи</a></p>
+    </div>
+  </article>
+
+<% if (more.length) { -%>
+  <section class="section section--alt" aria-labelledby="more-title">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <h2 class="section-head__title" id="more-title"><%= c.more_title || 'Читайте также' %></h2>
+      </div>
+      <div class="posts">
+<% more.forEach((item) => { -%>
+        <%- include('partials/post-card', { post: item, lead: false }) %>
+<% }) -%>
+      </div>
+    </div>
+  </section>
+<% } -%>
+
+<% if (c.post_cta_title) { -%>
+  <%- include('partials/cta-band', { title: c.post_cta_title, text: c.post_cta_text, buttonText: c.post_cta_button_text, buttonLink: '/catalog', tone: 'accent' }) %>
+<% } -%>
+</main>
+
+<%- include('partials/foot') %>

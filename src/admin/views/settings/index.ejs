@@ -1,0 +1,107 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Настройки</h1>
+    <p class="page-head__sub"><%= hint %></p>
+  </div>
+</div>
+
+<nav class="tabs tabs--page" aria-label="Разделы настроек">
+  <% groups.forEach((g) => { %>
+    <a href="/admin/settings?tab=<%= g.id %>"<%- g.id === group.id ? ' aria-current="true"' : '' %>><%= g.title %></a>
+  <% }) %>
+</nav>
+<%- include('../partials/form-error') %>
+
+<div class="cols <%= payment || bot ? 'cols--wide-left' : '' %>"<%- payment || bot ? '' : ' style="max-width: 48rem"' %>>
+  <form method="post" action="/admin/settings/<%= group.id %>" novalidate>
+    <%- csrfField %>
+    <section class="panel">
+      <div class="panel__head"><h2><%= group.title %></h2></div>
+      <div class="panel__body stack-4">
+        <% items.forEach((s) => { const id = `s-${s.key}`; const error = fields[s.key]; %>
+          <div class="field<%= error ? ' field--invalid' : '' %>">
+            <label class="field__label" for="<%= id %>"><%= s.label %></label>
+            <% if (s.type === 'textarea') { %>
+              <textarea class="textarea" id="<%= id %>" name="s[<%= s.key %>]" rows="<%= Math.min(9, Math.max(3, Math.ceil(String(s.value).length / 80) + (String(s.value).match(/\n/g) || []).length)) %>" maxlength="4000"><%= s.value %></textarea>
+            <% } else if (s.type === 'select') { %>
+              <select class="select" id="<%= id %>" name="s[<%= s.key %>]">
+                <% s.options.forEach((o) => { %><option value="<%= o.value %>"<%= String(s.value) === o.value ? ' selected' : '' %>><%= o.label %></option><% }) %>
+              </select>
+            <% } else { %>
+              <input class="input<%= s.type === 'number' ? ' input--num' : '' %>" type="<%= s.type === 'number' ? 'text' : s.type === 'tel' ? 'tel' : s.type === 'email' ? 'email' : 'text' %>"<%- s.type === 'number' ? ' inputmode="numeric" style="max-width: 14rem"' : '' %> id="<%= id %>" name="s[<%= s.key %>]" value="<%= s.value %>" maxlength="500"<%- s.type === 'url' ? ' placeholder="https://…"' : '' %>>
+            <% } %>
+            <% if (error) { %><span class="field__error"><%= error %></span>
+            <% } else if (s.key === 'bot_welcome_text') { %><span class="field__hint">Переменная <code>{name}</code> — имя пользователя</span>
+            <% } else if (s.key === 'bot_order_paid_text') { %><span class="field__hint">Переменные: <code>{number}</code> — номер заказа, <code>{total}</code> — сумма</span>
+            <% } else if (s.key === 'payment_provider') { %><span class="field__hint">По умолчанию из .env: <b><%= payment.providers.find((p) => p.id === payment.envDefault)?.title || payment.envDefault %></b></span><% } %>
+          </div>
+        <% }) %>
+      </div>
+      <div class="panel__foot">
+        <button class="btn btn--primary" type="submit"><%- icon('check', 15) %> Сохранить</button>
+        <span class="help">Изменения применяются сразу</span>
+      </div>
+    </section>
+  </form>
+
+  <% if (payment) { %>
+    <section class="panel">
+      <div class="panel__head">
+        <div><h2>Состояние провайдеров</h2><p>Значения ключей не отображаются — только заданы они или нет</p></div>
+      </div>
+      <div class="panel__body">
+        <% if (!payment.effective) { %>
+          <div class="alert alert--error" style="margin-bottom: var(--space-3)"><%- icon('alert', 16) %><span>Онлайн-оплата недоступна: выбранный провайдер не настроен. Покупатели увидят сообщение об ошибке при оплате.</span></div>
+        <% } else if (payment.fallback) { %>
+          <div class="alert alert--warning" style="margin-bottom: var(--space-3)"><%- icon('alert', 16) %><span>Выбранный провайдер не настроен, поэтому сейчас работает демо-оплата. В production оплата будет недоступна, пока не заданы ключи.</span></div>
+        <% } %>
+        <div class="provider-list">
+          <% payment.providers.forEach((p) => { %>
+            <div class="provider<%= p.effective ? ' is-active' : '' %>">
+              <div class="provider__title">
+                <%= p.title %>
+                <% if (p.effective) { %><span class="badge badge--success">Работает сейчас</span><% } else if (p.active) { %><span class="badge badge--warning">Выбран, не настроен</span><% } %>
+              </div>
+              <div>
+                <% if (!p.installed) { %><span class="badge">Модуль не подключён</span>
+                <% } else if (p.configured) { %><span class="badge badge--success"><%- icon('check', 12) %> Настроен</span>
+                <% } else { %><span class="badge badge--danger">Не настроен</span><% } %>
+              </div>
+              <p class="provider__note"><%= p.note %></p>
+              <% if (p.keys.length) { %>
+                <div class="provider__keys">
+                  <% p.keys.forEach((k) => { %>
+                    <span class="key-chip <%= k.set ? 'is-set' : (k.optional || !p.active) ? '' : 'is-missing' %>" title="<%= k.set ? 'Задан в .env' : k.optional ? 'Необязательный, не задан' : 'Не задан в .env' %>"><%= k.name %> · <%= k.set ? 'задан' : k.optional ? 'необязательный' : 'не задан' %></span>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    </section>
+  <% } %>
+
+  <% if (bot) { %>
+    <section class="panel">
+      <div class="panel__head">
+        <div><h2>Подключение бота</h2><p>Параметры задаются в .env на сервере</p></div>
+        <span class="<%= bot.enabled ? 'badge badge--success' : 'badge badge--danger' %>"><%= bot.enabled ? 'Бот подключён' : 'Бот не подключён' %></span>
+      </div>
+      <div class="panel__body">
+        <ul class="status-list">
+          <li><span class="name">Токен <span class="env-key">BOT_TOKEN</span></span><span class="key-chip <%= bot.enabled ? 'is-set' : 'is-missing' %>"><%= bot.enabled ? 'задан' : 'не задан' %></span></li>
+          <li><span class="name">Имя бота <span class="env-key">BOT_USERNAME</span></span><span><% if (bot.username) { %><a href="https://t.me/<%= bot.username %>" target="_blank" rel="noopener">@<%= bot.username %></a><% } else { %><span class="key-chip">не задано</span><% } %></span></li>
+          <li><span class="name">Чат администраторов <span class="env-key">ADMIN_CHAT_ID</span></span><span class="key-chip <%= bot.adminChat ? 'is-set' : 'is-missing' %>"><%= bot.adminChat ? 'задан' : 'не задан' %></span></li>
+          <li><span class="name">Режим получения обновлений</span><span><%= bot.mode === 'webhook' ? 'Webhook' : 'Long polling' %><% if (bot.mode === 'webhook') { %> · секрет <%= bot.webhookSecret ? 'задан' : 'не задан' %><% } %></span></li>
+          <li><span class="name">Мини-приложение</span><span><a href="<%= bot.tmaUrl %>" target="_blank" rel="noopener"><%= bot.tmaUrl %></a></span></li>
+        </ul>
+        <% if (!bot.https) { %><p class="help" style="margin: var(--space-3) 0 0"><%- icon('info', 13) %> Сайт работает не по HTTPS: Telegram не откроет мини-приложение и не покажет кнопки-ссылки, пока в <span class="env-key">BASE_URL</span> не будет https-адрес.</p><% } %>
+        <% if (bot.enabled && !bot.adminChat) { %><p class="help" style="margin: var(--space-3) 0 0"><%- icon('alert', 13) %> Без <span class="env-key">ADMIN_CHAT_ID</span> уведомления о заказах и обращениях не приходят в Telegram.</p><% } %>
+        <% if (bot.devAuth) { %><p class="help" style="margin: var(--space-3) 0 0"><%- icon('info', 13) %> Включён демо-вход в мини-приложение из браузера (<span class="env-key">TMA_DEV_AUTH</span>). В production он отключается автоматически.</p><% } %>
+      </div>
+    </section>
+  <% } %>
+</div>
+<%- include('../partials/foot') %>

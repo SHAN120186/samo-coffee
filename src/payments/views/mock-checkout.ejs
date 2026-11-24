@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title><%= title %> — <%= settings.site_name %></title>
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/tokens.css">
+  <style>
+    body { min-height: 100vh; display: grid; place-items: center; padding: var(--space-5) var(--space-4); background:
+      radial-gradient(60rem 30rem at 85% -10%, color-mix(in srgb, var(--color-accent) 14%, transparent), transparent 60%), var(--color-bg); }
+    .pay { width: 100%; max-width: 27rem; }
+    .pay__brand { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-5); }
+    .pay__brand img { height: 2rem; }
+    .pay__card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
+    .pay__head { padding: var(--space-5) var(--space-5) var(--space-4); border-bottom: 1px dashed var(--color-border-strong); }
+    .pay__label { font-size: var(--text-xs); letter-spacing: .08em; text-transform: uppercase; color: var(--color-text-muted); }
+    .pay__total { font-variant-numeric: lining-nums; font-family: var(--font-display); font-size: var(--text-3xl); line-height: 1.1; margin: var(--space-1) 0 0; }
+    .pay__items { list-style: none; margin: 0; padding: var(--space-4) var(--space-5); display: grid; gap: var(--space-2); font-size: var(--text-sm); border-bottom: 1px solid var(--color-border); }
+    .pay__items li { display: flex; justify-content: space-between; gap: var(--space-4); }
+    .pay__items span:last-child { white-space: nowrap; color: var(--color-text-muted); }
+    .pay__form { padding: var(--space-5); display: grid; gap: var(--space-3); }
+    .pay__fake { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+    .pay__fake .field--wide { grid-column: 1 / -1; }
+    .pay__fake input { font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+    .pay__actions { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
+    .pay__alt { display: flex; gap: var(--space-2); }
+    .pay__alt .btn { flex: 1; }
+    .pay__note { margin-top: var(--space-4); text-align: center; font-size: var(--text-xs); color: var(--color-text-muted); }
+  </style>
+</head>
+<body>
+  <main class="pay">
+    <div class="pay__brand">
+      <img src="/img/logo.svg" alt="<%= settings.site_name %>">
+      <span class="badge badge--warning">Демо-режим</span>
+    </div>
+    <div class="pay__card">
+      <div class="pay__head">
+        <div class="pay__label">Заказ <%= order.number %></div>
+        <p class="pay__total"><%= formatSum(order.total) %></p>
+      </div>
+      <ul class="pay__items">
+        <% order.items.forEach((item) => { %>
+          <li><span><%= item.title %> × <%= item.qty %></span><span><%= formatSum(item.total) %></span></li>
+        <% }) %>
+        <% if (order.delivery_fee) { %>
+          <li><span>Доставка</span><span><%= formatSum(order.delivery_fee) %></span></li>
+        <% } %>
+      </ul>
+      <form class="pay__form" method="post" action="/pay/mock/<%= payment.provider_tx_id %>">
+        <%- csrfField %>
+        <div class="pay__fake">
+          <label class="field field--wide"><span class="field__label">Номер карты</span>
+            <input class="input" value="8600 4954 7331 6478" readonly inputmode="numeric" autocomplete="off"></label>
+          <label class="field"><span class="field__label">Срок</span><input class="input" value="03/29" readonly></label>
+          <label class="field"><span class="field__label">SMS-код</span><input class="input" value="666666" readonly></label>
+        </div>
+        <div class="pay__actions">
+          <button class="btn btn--primary btn--lg btn--block" name="action" value="success" data-testid="mock-pay-success">Оплатить <%= formatSum(order.total) %></button>
+          <div class="pay__alt">
+            <button class="btn btn--ghost" name="action" value="fail" data-testid="mock-pay-fail">Имитировать отказ</button>
+            <button class="btn btn--ghost" name="action" value="cancel" data-testid="mock-pay-cancel">Вернуться в магазин</button>
+          </div>
+        </div>
+      </form>
+    </div>
+    <p class="pay__note">Это тестовая платёжная страница: деньги не списываются. В рабочем режиме здесь будет Payme, Click или Telegram Payments.</p>
+  </main>
+</body>
+</html>

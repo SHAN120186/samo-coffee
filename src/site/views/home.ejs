@@ -1,0 +1,256 @@
+<%- include('partials/head', { bodyClass: 'page-home' }) %>
+
+<main id="main">
+  <!-- hero -->
+  <section class="hero">
+    <div class="container hero__grid">
+      <div class="hero__copy">
+<% if (c.hero_eyebrow) { -%>
+        <p class="eyebrow hero__eyebrow"><%= c.hero_eyebrow %></p>
+<% } -%>
+        <h1 class="hero__title"><%- accentTitle(c.hero_title || settings.site_name) %></h1>
+<% if (c.hero_text) { -%>
+        <p class="lead hero__text"><%= c.hero_text %></p>
+<% } -%>
+        <div class="hero__actions">
+<% if (c.hero_cta_text && c.hero_cta_link) { -%>
+          <a class="btn btn--primary btn--lg" href="<%= c.hero_cta_link %>"><%= c.hero_cta_text %><%- icon('arrow', { size: 18 }) %></a>
+<% } -%>
+<% if (c.hero_cta2_text && c.hero_cta2_link) { -%>
+          <a class="btn btn--ghost btn--lg" href="<%= c.hero_cta2_link %>"><%= c.hero_cta2_text %></a>
+<% } -%>
+        </div>
+<% const stats = [1, 2, 3].map((n) => ({ value: c[`stat${n}_value`], label: c[`stat${n}_label`] })).filter((s) => s.value); -%>
+<% if (stats.length) { -%>
+        <dl class="stats">
+<% stats.forEach((s) => { -%>
+          <div class="stats__item">
+            <dt class="stats__value"><%= s.value %></dt>
+            <dd class="stats__label"><%= s.label %></dd>
+          </div>
+<% }) -%>
+        </dl>
+<% } -%>
+      </div>
+
+      <div class="hero__media">
+<% if (c.hero_image) { -%>
+        <img class="hero__img" src="<%= c.hero_image %>" alt="" width="1100" height="960" fetchpriority="high">
+<% } -%>
+<% if (c.hero_badge_text) { -%>
+        <div class="stamp" aria-hidden="true">
+          <svg class="stamp__ring" viewBox="0 0 200 200">
+            <defs><path id="stamp-circle" d="M100,100 m-76,0 a76,76 0 1,1 152,0 a76,76 0 1,1 -152,0"/></defs>
+            <text><textPath href="#stamp-circle" startOffset="0" textLength="470" lengthAdjust="spacing"><%= c.hero_badge_text %></textPath></text>
+          </svg>
+          <span class="stamp__core"><%- icon('flame', { size: 26 }) %></span>
+        </div>
+<% } -%>
+      </div>
+    </div>
+  </section>
+
+<% if (notes.length >= 4) { -%>
+  <!-- tasting notes ticker (decorative) -->
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker__track">
+<% [0, 1].forEach(() => { -%>
+      <ul class="ticker__group">
+<% notes.forEach((note) => { -%>
+        <li><%= note %></li>
+<% }) -%>
+      </ul>
+<% }) -%>
+    </div>
+  </div>
+<% } -%>
+
+<% if (featured.length) { -%>
+  <!-- featured products -->
+  <section class="section" aria-labelledby="featured-title">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <div>
+          <h2 class="section-head__title" id="featured-title"><%= c.featured_title %></h2>
+<% if (c.featured_text) { -%>
+          <p class="section-head__text"><%= c.featured_text %></p>
+<% } -%>
+        </div>
+<% if (c.featured_cta_text) { -%>
+        <a class="link-arrow" href="/catalog"><%= c.featured_cta_text %><%- icon('arrow', { size: 18 }) %></a>
+<% } -%>
+      </div>
+      <div class="pgrid">
+<% featured.forEach((p) => { -%>
+        <%- include('partials/product-card', { p }) %>
+<% }) -%>
+      </div>
+    </div>
+  </section>
+<% } -%>
+
+<% if (categories.length) { -%>
+  <!-- categories -->
+  <section class="section section--alt" aria-labelledby="categories-title">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <div>
+          <h2 class="section-head__title" id="categories-title"><%= c.categories_title %></h2>
+<% if (c.categories_text) { -%>
+          <p class="section-head__text"><%= c.categories_text %></p>
+<% } -%>
+        </div>
+      </div>
+      <ul class="cats">
+<% categories.forEach((cat) => { -%>
+        <li data-reveal>
+          <a class="cat" href="<%= withQuery('/catalog', { category: cat.slug }) %>">
+            <span class="cat__media"><img src="<%= cat.image || '/img/placeholder.svg' %>" alt="" width="800" height="600" loading="lazy" decoding="async"></span>
+            <span class="cat__row">
+              <span class="cat__title"><%= cat.title %></span>
+              <span class="cat__count"><%= cat.product_count %> <%= plural(cat.product_count, ['товар', 'товара', 'товаров']) %></span>
+            </span>
+<% if (cat.description) { -%>
+            <span class="cat__text"><%= cat.description %></span>
+<% } -%>
+          </a>
+        </li>
+<% }) -%>
+      </ul>
+    </div>
+  </section>
+<% } -%>
+
+  <!-- values -->
+<% const values = [1, 2, 3].map((n) => ({ title: c[`value${n}_title`], text: c[`value${n}_text`] })).filter((v) => v.title); -%>
+<% if (values.length) { -%>
+  <section class="section" aria-labelledby="values-title">
+    <div class="container">
+      <div class="values">
+        <h2 class="values__title" id="values-title" data-reveal><%= c.values_title %></h2>
+        <ol class="values__list">
+<% values.forEach((v, i) => { -%>
+          <li class="value" data-reveal>
+            <span class="value__num" aria-hidden="true">0<%= i + 1 %></span>
+            <h3 class="value__title"><%= v.title %></h3>
+            <p class="value__text"><%= v.text %></p>
+          </li>
+<% }) -%>
+        </ol>
+      </div>
+    </div>
+  </section>
+<% } -%>
+
+<% if (c.story_title) { -%>
+  <!-- story -->
+  <section class="section section--alt" aria-labelledby="story-title">
+    <div class="container split">
+<% if (c.story_image) { -%>
+      <div class="split__media" data-reveal>
+        <img src="<%= c.story_image %>" alt="" width="900" height="760" loading="lazy" decoding="async">
+      </div>
+<% } -%>
+      <div class="split__body" data-reveal>
+<% if (settings.site_tagline) { -%>
+        <p class="eyebrow"><%= settings.site_tagline %></p>
+<% } -%>
+        <h2 id="story-title"><%= c.story_title %></h2>
+        <div class="prose split__prose"><%- c.story_text %></div>
+<% if (c.story_cta_text) { -%>
+        <a class="link-arrow" href="/about"><%= c.story_cta_text %><%- icon('arrow', { size: 18 }) %></a>
+<% } -%>
+      </div>
+    </div>
+  </section>
+<% } -%>
+
+<% if (plans.length && c.subs_title) { -%>
+  <!-- subscription teaser -->
+  <section class="section" aria-labelledby="subs-title">
+    <div class="container">
+      <div class="subs-band" data-reveal>
+        <div class="subs-band__copy">
+          <h2 class="subs-band__title" id="subs-title"><%= c.subs_title %></h2>
+<% if (c.subs_text) { -%>
+          <p class="subs-band__text"><%= c.subs_text %></p>
+<% } -%>
+<% if (c.subs_cta_text) { -%>
+          <a class="btn btn--primary btn--lg" href="/subscriptions"><%= c.subs_cta_text %><%- icon('arrow', { size: 18 }) %></a>
+<% } -%>
+        </div>
+        <ul class="plan-rows">
+<% plans.forEach((plan) => { -%>
+          <li>
+            <a class="plan-row" href="/subscriptions/<%= plan.slug %>">
+              <span class="plan-row__main">
+                <span class="plan-row__title"><%= plan.title %><% if (plan.badge) { %> <span class="plan-row__badge"><%= plan.badge %></span><% } %></span>
+<% if (plan.description) { -%>
+                <span class="plan-row__desc"><%= plan.description %></span>
+<% } -%>
+              </span>
+              <span class="plan-row__price"><span class="price"><%= formatSum(plan.price) %></span><small><%= periodLabel(plan.period_days) %></small></span>
+              <span class="plan-row__arrow" aria-hidden="true"><%- icon('arrow', { size: 18 }) %></span>
+            </a>
+          </li>
+<% }) -%>
+        </ul>
+      </div>
+    </div>
+  </section>
+<% } -%>
+
+<% if (reviews.length) { -%>
+  <!-- reviews -->
+  <section class="section section--flush-top" aria-labelledby="reviews-title">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <h2 class="section-head__title" id="reviews-title"><%= c.reviews_title %></h2>
+      </div>
+      <ul class="reviews">
+<% reviews.forEach((r) => { -%>
+        <li class="review" data-reveal>
+          <figure>
+            <blockquote><p><%= r.text %></p></blockquote>
+            <figcaption>
+              <span class="review__avatar" aria-hidden="true"><%= (r.author || '•').trim().charAt(0) %></span>
+              <span><strong><%= r.author %></strong><% if (r.role) { %><small><%= r.role %></small><% } %></span>
+            </figcaption>
+          </figure>
+        </li>
+<% }) -%>
+      </ul>
+    </div>
+  </section>
+<% } -%>
+
+<% if (posts.length) { -%>
+  <!-- blog -->
+  <section class="section section--alt" aria-labelledby="blog-title">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <div>
+          <h2 class="section-head__title" id="blog-title"><%= c.blog_title %></h2>
+<% if (c.blog_text) { -%>
+          <p class="section-head__text"><%= c.blog_text %></p>
+<% } -%>
+        </div>
+<% if (c.blog_cta_text) { -%>
+        <a class="link-arrow" href="/blog"><%= c.blog_cta_text %><%- icon('arrow', { size: 18 }) %></a>
+<% } -%>
+      </div>
+      <div class="posts">
+<% posts.forEach((post) => { -%>
+        <%- include('partials/post-card', { post, lead: false }) %>
+<% }) -%>
+      </div>
+    </div>
+  </section>
+<% } -%>
+
+<% if (c.cta_title) { -%>
+  <%- include('partials/cta-band', { title: c.cta_title, text: c.cta_text, buttonText: c.cta_button_text, buttonLink: c.cta_button_link, tone: 'accent' }) %>
+<% } -%>
+</main>
+
+<%- include('partials/foot') %>

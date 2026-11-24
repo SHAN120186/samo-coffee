@@ -1,0 +1,47 @@
+<%- include('../partials/head') %>
+<% const action = isNew ? '/admin/admins' : `/admin/admins/${item.id}`; -%>
+<div class="page-head">
+  <div>
+    <a class="back-link" href="/admin/admins"><%- icon('left', 14) %> Все администраторы</a>
+    <h1><%= isNew ? 'Новый администратор' : (item.name || item.email) %></h1>
+  </div>
+</div>
+<%- include('../partials/form-error') %>
+
+<form method="post" action="<%= action %>" novalidate style="max-width: 40rem" autocomplete="off">
+  <%- csrfField %>
+  <section class="panel">
+    <div class="panel__body form-grid">
+      <div class="field">
+        <label class="field__label" for="ad-name">Имя</label>
+        <input class="input" type="text" id="ad-name" name="name" value="<%= item.name %>" maxlength="120">
+      </div>
+      <div class="field">
+        <label class="field__label" for="ad-email">E-mail <span class="req">*</span></label>
+        <input class="input" type="email" id="ad-email" name="email" value="<%= item.email %>" maxlength="160" required>
+      </div>
+      <div class="field">
+        <label class="field__label" for="ad-role">Роль</label>
+        <select class="select" id="ad-role" name="role"<%= isSelf ? ' disabled' : '' %>>
+          <% Object.entries(roles).forEach(([k, v]) => { %><option value="<%= k %>"<%= item.role === k ? ' selected' : '' %>><%= v %></option><% }) %>
+        </select>
+        <% if (isSelf) { %><span class="field__hint">Свою роль изменить нельзя</span><% } %>
+      </div>
+      <div class="field">
+        <label class="field__label" for="ad-password"><%= isNew ? 'Пароль' : 'Новый пароль' %><% if (isNew) { %> <span class="req">*</span><% } %></label>
+        <input class="input" type="password" id="ad-password" name="password" autocomplete="new-password" minlength="<%= minPassword %>"<%= isNew ? ' required' : '' %><%= isSelf ? ' disabled' : '' %>>
+        <span class="field__hint"><%= isSelf ? 'Свой пароль меняется в разделе «Мой аккаунт»' : isNew ? `Не короче ${minPassword} символов. Передайте его лично.` : 'Оставьте пустым, чтобы не менять. Сеансы администратора будут завершены.' %></span>
+      </div>
+      <% if (!isNew && !isSelf) { %>
+        <div class="span-all">
+          <label class="switch"><input type="checkbox" name="active" value="1"<%= item.active ? ' checked' : '' %>><span class="switch__track"></span><span>Доступ к панели разрешён</span></label>
+        </div>
+      <% } %>
+    </div>
+  </section>
+  <div class="form-actions">
+    <button class="btn btn--primary" type="submit"><%- icon('check', 15) %> <%= isNew ? 'Добавить' : 'Сохранить' %></button>
+    <a class="btn btn--ghost" href="/admin/admins">Отмена</a>
+  </div>
+</form>
+<%- include('../partials/foot') %>

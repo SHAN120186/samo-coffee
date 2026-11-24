@@ -1,0 +1,50 @@
+<%- include('partials/head', { bodyClass: 'page-delivery' }) %>
+
+<main id="main">
+  <section class="page-hero page-hero--split">
+    <div class="container page-hero__grid">
+      <div>
+        <h1 class="page-hero__title"><%= c.title %></h1>
+<% if (c.intro) { -%>
+        <p class="lead"><%= c.intro %></p>
+<% } -%>
+<% if (cards.length) { -%>
+        <ul class="info-cards">
+<% cards.forEach((card) => { -%>
+          <li class="info-card">
+            <span class="info-card__icon" aria-hidden="true"><%- icon(card.icon, { size: 22 }) %></span>
+            <span class="info-card__label"><%= card.label %></span>
+            <strong class="info-card__value"><%= card.value %></strong>
+<% if (card.note) { -%>
+            <span class="info-card__note"><%= card.note %></span>
+<% } -%>
+          </li>
+<% }) -%>
+        </ul>
+<% } -%>
+      </div>
+<% if (c.image) { -%>
+      <div class="page-hero__media">
+        <img src="<%= c.image %>" alt="" width="1000" height="760" fetchpriority="high">
+      </div>
+<% } -%>
+    </div>
+  </section>
+
+  <section class="section section--tight">
+    <div class="container two-col">
+      <article class="two-col__item" data-reveal>
+        <h2 class="two-col__title"><span class="two-col__icon" aria-hidden="true"><%- icon('truck', { size: 22 }) %></span><%= c.delivery_title %></h2>
+        <div class="prose"><%- c.delivery_body %></div>
+      </article>
+      <article class="two-col__item" data-reveal>
+        <h2 class="two-col__title"><span class="two-col__icon" aria-hidden="true"><%- icon('card', { size: 22 }) %></span><%= c.payment_title %></h2>
+        <div class="prose"><%- c.payment_body %></div>
+      </article>
+    </div>
+  </section>
+
+  <%- include('partials/cta-band', { title: pageFaq.cta_title, text: pageFaq.cta_text, buttonText: pageFaq.cta_button_text, buttonLink: '/contacts#form', tone: 'dark' }) %>
+</main>
+
+<%- include('partials/foot') %>

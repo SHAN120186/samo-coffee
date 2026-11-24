@@ -1,0 +1,19 @@
+<article class="post-card<%= locals.lead ? ' post-card--featured' : '' %>" data-reveal>
+  <a class="post-card__media" href="<%= post.url %>" tabindex="-1" aria-hidden="true">
+    <img src="<%= post.cover %>" alt="" width="1200" height="750" loading="<%= locals.lead ? 'eager' : 'lazy' %>" decoding="async">
+  </a>
+  <div class="post-card__body">
+    <p class="post-card__meta">
+      <time datetime="<%= isoDate(post.published_at || post.created_at) %>"><%= formatDate(post.published_at || post.created_at) %></time>
+      <span aria-hidden="true">·</span>
+      <span><%= post.reading_min %> мин чтения</span>
+    </p>
+    <<%= locals.headingTag || 'h3' %> class="post-card__title"><a href="<%= post.url %>"><%= post.title %></a></<%= locals.headingTag || 'h3' %>>
+<% if (post.excerpt) { -%>
+    <p class="post-card__excerpt"><%= post.excerpt %></p>
+<% } -%>
+<% if (locals.lead) { -%>
+    <a class="link-arrow" href="<%= post.url %>" aria-hidden="true" tabindex="-1">Читать статью<%- icon('arrow', { size: 18 }) %></a>
+<% } -%>
+  </div>
+</article>

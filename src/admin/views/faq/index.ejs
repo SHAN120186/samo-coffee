@@ -1,0 +1,43 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Вопросы и ответы</h1>
+    <p class="page-head__sub">Раздел FAQ на сайте. Порядок строк здесь — порядок вопросов на странице: перетаскивайте за маркер или используйте стрелки.</p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn" href="/faq" target="_blank" rel="noopener"><%- icon('external', 15) %> Открыть на сайте</a>
+    <a class="btn btn--primary" href="/admin/faq/new"><%- icon('plus', 15) %> Добавить вопрос</a>
+  </div>
+</div>
+
+<section class="panel">
+  <% if (items.length) { %>
+    <div class="table-wrap">
+      <table class="table" data-reorder-url="/admin/faq/reorder">
+        <thead><tr><th style="width: 2.5rem"><span class="visually-hidden">Порядок</span></th><th>Вопрос</th><th>Тема</th><th>Статус</th><th><span class="visually-hidden">Действия</span></th></tr></thead>
+        <tbody>
+          <% items.forEach((f, i) => { %>
+            <tr data-id="<%= f.id %>" class="<%= f.active ? '' : 'is-muted' %>">
+              <td><span class="grip" tabindex="0" role="button" title="Перетащите, чтобы изменить порядок (или стрелки ↑ ↓)" aria-label="Изменить порядок"><%- icon('grip', 16) %></span></td>
+              <td><a class="t-main" href="/admin/faq/<%= f.id %>"><%= f.question %></a><span class="t-sub"><%= truncate(stripTags(f.answer), 120) || 'Ответ не заполнен' %></span></td>
+              <td class="t-nowrap"><%= f.topic || '—' %></td>
+              <td><span class="<%= f.active ? 'badge badge--success' : 'badge' %>"><%= f.active ? 'На сайте' : 'Скрыт' %></span></td>
+              <td class="t-actions">
+                <form method="post" action="/admin/faq/<%= f.id %>/move"><%- csrfField %><input type="hidden" name="dir" value="up"><button class="btn btn--sm btn--quiet btn--icon" type="submit" title="Выше" aria-label="Переместить выше"<%= i === 0 ? ' disabled' : '' %>><%- icon('up', 15) %></button></form>
+                <form method="post" action="/admin/faq/<%= f.id %>/move"><%- csrfField %><input type="hidden" name="dir" value="down"><button class="btn btn--sm btn--quiet btn--icon" type="submit" title="Ниже" aria-label="Переместить ниже"<%= i === items.length - 1 ? ' disabled' : '' %>><%- icon('down', 15) %></button></form>
+                <form method="post" action="/admin/faq/<%= f.id %>/toggle"><%- csrfField %><button class="btn btn--sm" type="submit"><%= f.active ? 'Скрыть' : 'Показать' %></button></form>
+                <a class="btn btn--sm btn--quiet btn--icon" href="/admin/faq/<%= f.id %>" title="Редактировать" aria-label="Редактировать"><%- icon('edit', 15) %></a>
+                <form method="post" action="/admin/faq/<%= f.id %>/delete" data-confirm="Удалить вопрос «<%= f.question %>»?">
+                  <%- csrfField %><button class="btn btn--sm btn--quiet btn--icon" type="submit" title="Удалить" aria-label="Удалить"><%- icon('trash', 15) %></button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } else { %>
+    <div class="empty"><span class="empty__icon"><%- icon('help', 22) %></span><span class="empty__title">Вопросов пока нет</span><p>Добавьте ответы на частые вопросы о доставке, оплате и подписке — это разгружает поддержку.</p><a class="btn btn--primary" href="/admin/faq/new"><%- icon('plus', 15) %> Добавить вопрос</a></div>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

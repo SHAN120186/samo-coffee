@@ -1,0 +1,95 @@
+<%- include('../partials/head') %>
+<%
+  const err = (name) => fields[name] ? `<span class="field__error">${escapeHtml(fields[name])}</span>` : '';
+  const inv = (name) => fields[name] ? ' field--invalid' : '';
+-%>
+<div class="page-head">
+  <div>
+    <h1>Рассылки</h1>
+    <p class="page-head__sub">Сообщение всем пользователям Telegram-бота: новый лот, акция, изменение графика. Отправка идёт постепенно, чтобы не превышать лимиты Telegram.</p>
+  </div>
+</div>
+<%- include('../partials/form-error') %>
+<% if (!botEnabled) { %>
+  <div class="flashes"><div class="alert alert--warning"><%- icon('alert', 16) %><span>Бот не подключён (BOT_TOKEN не задан). Можно подготовить черновик — отправка станет доступна после подключения бота.</span></div></div>
+<% } %>
+
+<div class="cols cols--wide-left">
+  <section class="panel">
+    <div class="panel__head">
+      <div><h2>Новая рассылка</h2><p>Получателей: <b><%= formatNumber(audience.active) %></b><% if (audience.blocked) { %> · заблокировали бота: <%= formatNumber(audience.blocked) %><% } %></p></div>
+    </div>
+    <form class="panel__body stack-4" method="post" action="/admin/broadcasts" data-broadcast-form novalidate>
+      <%- csrfField %>
+      <div class="field<%- inv('text') %>">
+        <label class="field__label" for="b-text">Текст сообщения <span class="req">*</span></label>
+        <textarea class="textarea" id="b-text" name="text" rows="7" maxlength="3500" data-counter="b-count" required placeholder="Привезли новый лот из Эфиопии — жасмин, бергамот и персик. До воскресенья −10 % по подписке."><%= form.text %></textarea>
+        <%- err('text') || '<span class="field__hint">Можно использовать теги Telegram: &lt;b&gt;жирный&lt;/b&gt;, &lt;i&gt;курсив&lt;/i&gt;, &lt;a href="https://…"&gt;ссылка&lt;/a&gt;. <span id="b-count"></span></span>' %>
+      </div>
+      <div class="field<%- inv('image') %>">
+        <label class="field__label" for="b-image">Картинка</label>
+        <input class="input" type="text" id="b-image" name="image" value="<%= form.image %>" maxlength="500" placeholder="https://…">
+        <%- err('image') || '<span class="field__hint">Необязательно. Публичная https-ссылка на изображение — Telegram скачает его сам</span>' %>
+      </div>
+      <div class="form-grid">
+        <div class="field<%- inv('button_text') %>">
+          <label class="field__label" for="b-btn-text">Текст кнопки</label>
+          <input class="input" type="text" id="b-btn-text" name="button_text" value="<%= form.button_text %>" maxlength="60" placeholder="Открыть магазин">
+          <%- err('button_text') %>
+        </div>
+        <div class="field<%- inv('button_url') %>">
+          <label class="field__label" for="b-btn-url">Ссылка кнопки</label>
+          <input class="input" type="text" id="b-btn-url" name="button_url" value="<%= form.button_url %>" maxlength="500" placeholder="https://…">
+          <%- err('button_url') %>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn--primary" type="submit" name="action" value="send"<%= botEnabled && audience.active ? '' : ' disabled' %> data-confirm="Отправить сообщение <%= formatNumber(audience.active) %> <%= plural(audience.active, ['пользователю', 'пользователям', 'пользователям']) %> бота? Отменить отправку будет нельзя." data-confirm-ok="Отправить" data-confirm-tone="primary"><%- icon('send', 15) %> Отправить всем</button>
+        <button class="btn" type="submit" name="action" value="draft">Сохранить черновик</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head"><div><h2>Предпросмотр</h2><p>Так сообщение увидит пользователь</p></div></div>
+    <div class="panel__body"><div class="tg-preview" data-broadcast-preview></div></div>
+  </section>
+</div>
+
+<section class="panel section-gap">
+  <div class="panel__head"><h2>История рассылок</h2></div>
+  <% if (history.length) { %>
+    <div class="table-wrap">
+      <table class="table" data-broadcast-history data-sending="<%= sending ? 1 : 0 %>">
+        <thead><tr><th>№</th><th>Сообщение</th><th>Статус</th><th>Доставка</th><th>Создана</th><th><span class="visually-hidden">Действия</span></th></tr></thead>
+        <tbody>
+          <% history.forEach((b) => { const done = b.sent + b.failed; %>
+            <tr data-id="<%= b.id %>">
+              <td class="num"><%= b.id %></td>
+              <td style="max-width: 32rem"><span class="t-main"><%= truncate(stripTags(b.text), 120) %></span><% if (b.button_text) { %><span class="t-sub">Кнопка: <%= b.button_text %></span><% } %></td>
+              <td><span class="<%= badgeClass('broadcast', b.status) %>"><%= statuses[b.status] || b.status %></span></td>
+              <td style="min-width: 11rem">
+                <% if (b.status === 'draft') { %><span class="muted-dash">—</span>
+                <% } else { %>
+                  <div class="progress"><span data-progress style="width: <%= b.total ? Math.round((done / b.total) * 100) : 100 %>%"></span></div>
+                  <span class="t-sub" data-progress-label><%= b.sent %> из <%= b.total %><%= b.failed ? ` · ошибок: ${b.failed}` : '' %></span>
+                <% } %>
+              </td>
+              <td class="t-nowrap"><%= formatDateTime(b.created_at) %></td>
+              <td class="t-actions">
+                <% if (b.status === 'draft') { %>
+                  <form method="post" action="/admin/broadcasts/<%= b.id %>/send" data-confirm="Отправить черновик №<%= b.id %> всем пользователям бота (<%= formatNumber(audience.active) %>)?" data-confirm-ok="Отправить" data-confirm-tone="primary">
+                    <%- csrfField %><button class="btn btn--sm" type="submit"<%= botEnabled ? '' : ' disabled' %>><%- icon('send', 14) %> Отправить</button>
+                  </form>
+                <% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } else { %>
+    <div class="empty"><span class="empty__icon"><%- icon('send', 22) %></span><span class="empty__title">Рассылок ещё не было</span><p>Напишите первое сообщение — оно сохранится здесь вместе со статистикой доставки.</p></div>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

@@ -1,0 +1,21 @@
+<%# Closing call-to-action band. Locals: title, text, buttonText, buttonLink, tone ('accent' | 'dark') %>
+<section class="section section--tight">
+  <div class="container">
+    <div class="cta-band cta-band--<%= locals.tone || 'accent' %>" data-reveal>
+      <div class="cta-band__text">
+        <h2 class="cta-band__title"><%= title %></h2>
+<% if (locals.text) { -%>
+        <p><%= text %></p>
+<% } -%>
+      </div>
+      <div class="cta-band__actions">
+<% if (locals.buttonText && locals.buttonLink) { -%>
+        <a class="btn btn--light btn--lg" href="<%= buttonLink %>"><%= buttonText %><%- icon('arrow', { size: 18 }) %></a>
+<% } -%>
+<% if (tgLink) { -%>
+        <a class="btn btn--outline-light btn--lg" href="<%= tgLink %>" target="_blank" rel="noopener"><%- icon('telegram', { size: 18 }) %><%= g.tg_button_text || 'Открыть в Telegram' %></a>
+<% } -%>
+      </div>
+    </div>
+  </div>
+</section>

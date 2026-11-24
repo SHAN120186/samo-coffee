@@ -1,0 +1,208 @@
+<%- include('../partials/head') %>
+<%
+  const action = isNew ? '/admin/products' : `/admin/products/${product.id}`;
+  const err = (name) => fields[name] ? `<span class="field__error">${escapeHtml(fields[name])}</span>` : '';
+  const inv = (name) => fields[name] ? ' field--invalid' : '';
+  const attrs = Object.entries(product.attributes || {});
+  const images = product.images || [];
+-%>
+<div class="page-head">
+  <div>
+    <a class="back-link" href="/admin/products"><%- icon('left', 14) %> Все товары</a>
+    <h1><%= isNew ? 'Новый товар' : product.title %></h1>
+    <% if (!isNew) { %><p class="page-head__sub">Продано <%= formatNumber(product.sold || 0) %> шт. · обновлён <%= formatDateTime(product.updated_at) %></p><% } %>
+  </div>
+  <div class="page-head__actions">
+    <% if (!isNew && product.url) { %><a class="btn" href="<%= product.url %>" target="_blank" rel="noopener"><%- icon('external', 15) %> Открыть на сайте</a><% } %>
+  </div>
+</div>
+<%- include('../partials/form-error') %>
+
+<form method="post" action="<%= action %>" id="product-form" data-guard novalidate>
+  <%- csrfField %>
+  <div class="cols cols--main">
+    <div class="stack-4">
+      <section class="panel">
+        <div class="panel__head"><h2>Основное</h2></div>
+        <div class="panel__body form-grid">
+          <div class="field span-all<%- inv('title') %>">
+            <label class="field__label" for="p-title">Название <span class="req">*</span></label>
+            <input class="input" type="text" id="p-title" name="title" value="<%= product.title %>" maxlength="160" required>
+            <%- err('title') %>
+          </div>
+          <div class="field span-all">
+            <label class="field__label" for="p-subtitle">Подзаголовок</label>
+            <input class="input" type="text" id="p-subtitle" name="subtitle" value="<%= product.subtitle %>" maxlength="200" placeholder="Например: жасмин, бергамот, персик">
+            <span class="field__hint">Короткая строка под названием — вкусовые ноты или назначение</span>
+          </div>
+          <div class="field span-all">
+            <label class="field__label" for="p-description">Краткое описание</label>
+            <textarea class="textarea" id="p-description" name="description" rows="3" maxlength="2000"><%= product.description %></textarea>
+            <span class="field__hint">Показывается в карточке товара и в поисковой выдаче</span>
+          </div>
+          <div class="field span-all">
+            <label class="field__label" for="p-details">Подробное описание</label>
+            <%- include('../partials/editor', { name: 'details_html', value: product.details_html, id: 'p-details', tall: false, placeholder: 'Расскажите о вкусе, ферме, способе заваривания…' }) %>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel__head">
+          <div><h2>Изображения</h2><p>Первое изображение — обложка. Перетаскивайте, чтобы изменить порядок.</p></div>
+        </div>
+        <div class="panel__body" data-gallery data-name="images[]" data-max="12">
+          <ul class="gallery" data-gallery-list>
+            <% images.forEach((url) => { %>
+              <li class="gallery__item" data-gallery-item draggable="true">
+                <img src="<%= url %>" alt="" draggable="false">
+                <span class="badge badge--accent gallery__cover">Обложка</span>
+                <input type="hidden" name="images[]" value="<%= url %>">
+                <div class="gallery__tools">
+                  <button class="btn btn--sm btn--quiet btn--icon" type="button" data-act="left" title="Переместить влево" aria-label="Переместить влево"><%- icon('left', 14) %></button>
+                  <button class="btn btn--sm btn--quiet btn--icon" type="button" data-act="remove" title="Убрать" aria-label="Убрать изображение"><%- icon('trash', 14) %></button>
+                  <button class="btn btn--sm btn--quiet btn--icon" type="button" data-act="right" title="Переместить вправо" aria-label="Переместить вправо"><%- icon('right', 14) %></button>
+                </div>
+              </li>
+            <% }) %>
+          </ul>
+          <template>
+            <li class="gallery__item" data-gallery-item draggable="true">
+              <img src="" alt="" draggable="false">
+              <span class="badge badge--accent gallery__cover">Обложка</span>
+              <input type="hidden" name="images[]" value="">
+              <div class="gallery__tools">
+                <button class="btn btn--sm btn--quiet btn--icon" type="button" data-act="left" title="Переместить влево" aria-label="Переместить влево"><%- icon('left', 14) %></button>
+                <button class="btn btn--sm btn--quiet btn--icon" type="button" data-act="remove" title="Убрать" aria-label="Убрать изображение"><%- icon('trash', 14) %></button>
+                <button class="btn btn--sm btn--quiet btn--icon" type="button" data-act="right" title="Переместить вправо" aria-label="Переместить вправо"><%- icon('right', 14) %></button>
+              </div>
+            </li>
+          </template>
+          <div class="image-field__buttons" style="margin-top: var(--space-3)">
+            <button class="btn btn--sm" type="button" data-gallery-upload><%- icon('upload', 14) %> Загрузить файлы</button>
+            <button class="btn btn--sm btn--quiet" type="button" data-gallery-pick><%- icon('image', 14) %> Выбрать из медиатеки</button>
+            <span class="image-field__status" data-gallery-status role="status"></span>
+          </div>
+          <p class="help" style="margin: var(--space-2) 0 0">До 12 изображений: JPG, PNG, WebP, GIF или AVIF. Файлы можно перетащить в эту область.</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel__head"><h2>Характеристики</h2></div>
+        <div class="panel__body">
+          <div class="form-grid form-grid--4">
+            <div class="field">
+              <label class="field__label" for="p-origin">Страна / регион</label>
+              <input class="input" type="text" id="p-origin" name="origin" value="<%= product.origin %>" maxlength="120" placeholder="Эфиопия, Иргачеффе">
+            </div>
+            <div class="field">
+              <label class="field__label" for="p-process">Обработка</label>
+              <input class="input" type="text" id="p-process" name="process" value="<%= product.process %>" maxlength="120" list="process-list" placeholder="Мытая">
+              <datalist id="process-list"><option value="Мытая"><option value="Натуральная"><option value="Хани"><option value="Анаэробная"></datalist>
+            </div>
+            <div class="field">
+              <label class="field__label" for="p-roast">Обжарка</label>
+              <input class="input" type="text" id="p-roast" name="roast" value="<%= product.roast %>" maxlength="60" list="roast-list" placeholder="Средняя">
+              <datalist id="roast-list"><option value="Светлая"><option value="Средняя"><option value="Тёмная"></datalist>
+            </div>
+            <div class="field<%- inv('weight_g') %>">
+              <label class="field__label" for="p-weight">Вес</label>
+              <div class="input-group"><input class="input input--num" type="text" inputmode="numeric" id="p-weight" name="weight_g" value="<%= product.weight_g ?? '' %>" maxlength="6"><span class="input-group__addon">г</span></div>
+              <%- err('weight_g') %>
+            </div>
+          </div>
+
+          <h3 style="margin-top: var(--space-5)">Дополнительные характеристики</h3>
+          <p class="help">Произвольные пары «название — значение»: высота произрастания, сорт, материал, объём.</p>
+          <div data-kv>
+            <div class="kv-rows" data-kv-rows>
+              <% attrs.forEach(([k, v]) => { %>
+                <div class="kv-row" data-kv-row>
+                  <input class="input" type="text" name="attr_key[]" value="<%= k %>" maxlength="60" placeholder="Название" aria-label="Название характеристики">
+                  <input class="input" type="text" name="attr_value[]" value="<%= v %>" maxlength="200" placeholder="Значение" aria-label="Значение характеристики">
+                  <button class="btn btn--quiet btn--icon" type="button" data-kv-remove title="Удалить строку" aria-label="Удалить строку"><%- icon('close', 15) %></button>
+                </div>
+              <% }) %>
+            </div>
+            <template>
+              <div class="kv-row" data-kv-row>
+                <input class="input" type="text" name="attr_key[]" maxlength="60" placeholder="Название" aria-label="Название характеристики">
+                <input class="input" type="text" name="attr_value[]" maxlength="200" placeholder="Значение" aria-label="Значение характеристики">
+                <button class="btn btn--quiet btn--icon" type="button" data-kv-remove title="Удалить строку" aria-label="Удалить строку"><%- icon('close', 15) %></button>
+              </div>
+            </template>
+            <button class="btn btn--sm" type="button" data-kv-add style="margin-top: var(--space-3)"><%- icon('plus', 14) %> Добавить характеристику</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="stack-4">
+      <section class="panel">
+        <div class="panel__head"><h2>Публикация</h2></div>
+        <div class="panel__body stack-4">
+          <label class="switch"><input type="checkbox" name="active" value="1"<%= product.active ? ' checked' : '' %>><span class="switch__track"></span><span>Показывать на сайте</span></label>
+          <label class="switch"><input type="checkbox" name="featured" value="1"<%= product.featured ? ' checked' : '' %>><span class="switch__track"></span><span>Рекомендуемый (на главной)</span></label>
+          <div class="field">
+            <label class="field__label" for="p-category">Категория</label>
+            <select class="select" id="p-category" name="category_id">
+              <option value="">Без категории</option>
+              <% categories.forEach((c) => { %><option value="<%= c.id %>"<%= Number(product.category_id) === c.id ? ' selected' : '' %>><%= c.title %><%= c.active ? '' : ' (скрыта)' %></option><% }) %>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel__head"><h2>Цена и склад</h2></div>
+        <div class="panel__body stack-4">
+          <div class="field<%- inv('price') %>">
+            <label class="field__label" for="p-price">Цена <span class="req">*</span></label>
+            <div class="input-group"><input class="input input--num" type="text" inputmode="numeric" id="p-price" name="price" value="<%= product.price %>" maxlength="10" required><span class="input-group__addon">сум</span></div>
+            <%- err('price') %>
+          </div>
+          <div class="field<%- inv('old_price') %>">
+            <label class="field__label" for="p-old-price">Старая цена</label>
+            <div class="input-group"><input class="input input--num" type="text" inputmode="numeric" id="p-old-price" name="old_price" value="<%= product.old_price ?? '' %>" maxlength="10"><span class="input-group__addon">сум</span></div>
+            <%- err('old_price') || '<span class="field__hint">Зачёркнутая цена для скидки. Оставьте пустой, если скидки нет</span>' %>
+          </div>
+          <div class="field<%- inv('stock') %>">
+            <label class="field__label" for="p-stock">Остаток на складе</label>
+            <div class="input-group"><input class="input input--num" type="text" inputmode="numeric" id="p-stock" name="stock" value="<%= product.stock %>" maxlength="6"><span class="input-group__addon">шт.</span></div>
+            <%- err('stock') || '<span class="field__hint">Списывается автоматически при оплате заказа</span>' %>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel__head"><h2>Адрес и порядок</h2></div>
+        <div class="panel__body stack-4">
+          <div class="field<%- inv('slug') %>">
+            <label class="field__label" for="p-slug">Адрес страницы</label>
+            <div class="input-group"><input class="input" type="text" id="p-slug" name="slug" value="<%= product.slug %>" maxlength="120" placeholder="создастся из названия" autocomplete="off"></div>
+            <%- err('slug') || '<span class="field__hint">/catalog/<b>адрес</b> — латиница, цифры и дефис</span>' %>
+          </div>
+          <div class="field">
+            <label class="field__label" for="p-sort">Порядок в каталоге</label>
+            <input class="input input--num" type="text" inputmode="numeric" id="p-sort" name="sort" value="<%= product.sort %>" maxlength="5" style="max-width: 7rem">
+            <span class="field__hint">Чем меньше число, тем выше товар</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn btn--primary" type="submit"><%- icon('check', 15) %> <%= isNew ? 'Создать товар' : 'Сохранить' %></button>
+    <a class="btn btn--ghost" href="/admin/products">Отмена</a>
+    <% if (!isNew) { %>
+      <button class="btn btn--danger-quiet" type="submit" form="product-delete" style="margin-left: auto"><%- icon('trash', 15) %> Удалить товар</button>
+    <% } %>
+  </div>
+</form>
+<% if (!isNew) { %>
+  <form method="post" action="/admin/products/<%= product.id %>/delete" id="product-delete" data-confirm="Удалить товар «<%= product.title %>»? В оформленных заказах он останется, но с сайта исчезнет.">
+    <%- csrfField %>
+  </form>
+<% } %>
+<%- include('../partials/foot', { scripts: ['/admin/js/editor.js'] }) %>

@@ -1,0 +1,48 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Блог</h1>
+    <p class="page-head__sub">Статьи о кофе и новости обжарки. Черновики не видны на сайте.</p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn btn--primary" href="/admin/posts/new"><%- icon('plus', 15) %> Написать статью</a>
+  </div>
+</div>
+
+<section class="panel">
+  <% if (posts.length) { %>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Статья</th><th>Автор</th><th>Статус</th><th>Дата</th><th class="num">Чтение</th><th><span class="visually-hidden">Действия</span></th></tr></thead>
+        <tbody>
+          <% posts.forEach((p) => { %>
+            <tr class="<%= p.published ? '' : 'is-muted' %>">
+              <td>
+                <div class="cell-product">
+                  <img class="thumb" src="<%= p.cover %>" alt="" loading="lazy" width="44" height="44">
+                  <div><a class="t-main" href="/admin/posts/<%= p.id %>"><%= p.title %></a><span class="t-sub"><%= truncate(p.excerpt, 110) %></span></div>
+                </div>
+              </td>
+              <td class="t-nowrap"><%= p.author || '—' %></td>
+              <td><span class="<%= p.published ? 'badge badge--success' : 'badge' %>"><%= p.published ? 'Опубликована' : 'Черновик' %></span></td>
+              <td class="t-nowrap"><%= formatDateShort(p.published_at || p.created_at) %></td>
+              <td class="num"><%= p.reading_min %> мин</td>
+              <td class="t-actions">
+                <form method="post" action="/admin/posts/<%= p.id %>/toggle"><%- csrfField %><button class="btn btn--sm" type="submit"><%= p.published ? 'Снять' : 'Опубликовать' %></button></form>
+                <% if (p.published) { %><a class="btn btn--sm btn--quiet btn--icon" href="<%= p.url %>" target="_blank" rel="noopener" title="Открыть на сайте" aria-label="Открыть на сайте"><%- icon('external', 15) %></a><% } %>
+                <a class="btn btn--sm btn--quiet btn--icon" href="/admin/posts/<%= p.id %>" title="Редактировать" aria-label="Редактировать"><%- icon('edit', 15) %></a>
+                <form method="post" action="/admin/posts/<%= p.id %>/delete" data-confirm="Удалить статью «<%= p.title %>»? Восстановить её не получится.">
+                  <%- csrfField %><button class="btn btn--sm btn--quiet btn--icon" type="submit" title="Удалить" aria-label="Удалить"><%- icon('trash', 15) %></button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <%- include('../partials/pager') %>
+  <% } else { %>
+    <div class="empty"><span class="empty__icon"><%- icon('pen', 22) %></span><span class="empty__title">В блоге пока нет статей</span><p>Расскажите о новом лоте, способе заваривания или поездке на ферму.</p><a class="btn btn--primary" href="/admin/posts/new"><%- icon('plus', 15) %> Написать статью</a></div>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

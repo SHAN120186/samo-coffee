@@ -1,0 +1,5 @@
+<%# Rich text editor (progressively enhanced textarea). Params: name, value, [id], [tall], [placeholder] %>
+<% const _eid = locals.id || ('rt-' + String(name).replace(/[^a-z0-9]+/gi, '-')); %>
+<div class="editor<%= locals.tall ? ' editor--tall' : '' %>" data-editor>
+  <textarea class="textarea editor__fallback" id="<%= _eid %>" name="<%= name %>" rows="<%= locals.tall ? 16 : 7 %>" data-editor-input data-placeholder="<%= locals.placeholder || 'Начните писать…' %>"><%= value || '' %></textarea>
+</div>

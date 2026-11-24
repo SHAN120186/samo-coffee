@@ -1,0 +1,54 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Мой аккаунт</h1>
+    <p class="page-head__sub"><%= admin.role_label %> · последний вход <%= admin.last_login_at ? formatDateTimeFull(admin.last_login_at) : '—' %></p>
+  </div>
+  <div class="page-head__actions">
+    <% if (can('owner')) { %><a class="btn" href="/admin/admins"><%- icon('shield', 15) %> Администраторы</a><% } %>
+  </div>
+</div>
+
+<div class="cols cols--2" style="max-width: 62rem">
+  <section class="panel">
+    <div class="panel__head"><h2>Профиль</h2></div>
+    <form class="panel__body stack-4" method="post" action="/admin/account/profile" novalidate>
+      <%- csrfField %>
+      <% if (error && errorForm === 'profile') { %><div class="alert alert--error" role="alert"><%- icon('alert', 16) %><span><%= error %></span></div><% } %>
+      <div class="field">
+        <label class="field__label" for="acc-name">Имя</label>
+        <input class="input" type="text" id="acc-name" name="name" value="<%= profile.name %>" maxlength="120" autocomplete="name">
+        <span class="field__hint">Показывается в истории заказов и в ответах на обращения</span>
+      </div>
+      <div class="field">
+        <label class="field__label" for="acc-email">E-mail для входа</label>
+        <input class="input" type="email" id="acc-email" name="email" value="<%= profile.email %>" maxlength="160" autocomplete="username" required>
+      </div>
+      <div><button class="btn btn--primary" type="submit">Сохранить профиль</button></div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div class="panel__head"><h2>Смена пароля</h2></div>
+    <form class="panel__body stack-4" method="post" action="/admin/account/password" novalidate>
+      <%- csrfField %>
+      <% if (error && errorForm === 'password') { %><div class="alert alert--error" role="alert"><%- icon('alert', 16) %><span><%= error %></span></div><% } %>
+      <div class="field">
+        <label class="field__label" for="acc-current">Текущий пароль</label>
+        <input class="input" type="password" id="acc-current" name="current_password" autocomplete="current-password" required>
+      </div>
+      <div class="field">
+        <label class="field__label" for="acc-new">Новый пароль</label>
+        <input class="input" type="password" id="acc-new" name="new_password" autocomplete="new-password" minlength="<%= minPassword %>" required>
+        <span class="field__hint">Не короче <%= minPassword %> символов</span>
+      </div>
+      <div class="field">
+        <label class="field__label" for="acc-new2">Новый пароль ещё раз</label>
+        <input class="input" type="password" id="acc-new2" name="new_password_confirm" autocomplete="new-password" minlength="<%= minPassword %>" required>
+      </div>
+      <div><button class="btn btn--primary" type="submit"><%- icon('key', 15) %> Изменить пароль</button></div>
+      <p class="help" style="margin: 0">После смены пароля все остальные сеансы этого аккаунта будут завершены.</p>
+    </form>
+  </section>
+</div>
+<%- include('../partials/foot') %>

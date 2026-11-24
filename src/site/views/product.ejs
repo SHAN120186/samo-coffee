@@ -1,0 +1,140 @@
+<%- include('partials/head', { bodyClass: 'page-product' }) %>
+<%
+  const low = product.in_stock && product.stock <= 5;
+  const gallery = product.images.length ? product.images : [product.image];
+-%>
+
+<main id="main">
+  <div class="container product-top">
+    <%- include('partials/breadcrumbs', { crumbs }) %>
+  </div>
+
+  <section class="container product" data-testid="product">
+    <div class="gallery" data-gallery>
+      <div class="gallery__main">
+        <img src="<%= gallery[0] %>" alt="<%= product.title %>" width="800" height="800" fetchpriority="high" data-gallery-main>
+<% if (product.discount_percent && product.in_stock) { -%>
+        <span class="badge badge--sale gallery__badge">−<%= product.discount_percent %>%</span>
+<% } -%>
+      </div>
+<% if (gallery.length > 1) { -%>
+      <ul class="gallery__thumbs">
+<% gallery.forEach((src, i) => { -%>
+        <li>
+          <a class="gallery__thumb<%= i === 0 ? ' is-active' : '' %>" href="<%= src %>" data-gallery-thumb aria-label="Фото <%= i + 1 %> из <%= gallery.length %>">
+            <img src="<%= src %>" alt="" width="160" height="160" loading="lazy">
+          </a>
+        </li>
+<% }) -%>
+      </ul>
+<% } -%>
+    </div>
+
+    <div class="product__info">
+<% if (product.category_title) { -%>
+      <p class="eyebrow"><a href="<%= withQuery('/catalog', { category: product.category_slug }) %>"><%= product.category_title %></a></p>
+<% } -%>
+      <h1 class="product__title"><%= product.title %></h1>
+<% if (product.subtitle) { -%>
+      <p class="product__notes"><%= product.subtitle %></p>
+<% } -%>
+<% if (product.description) { -%>
+      <p class="product__desc"><%= product.description %></p>
+<% } -%>
+
+      <div class="product__buy">
+        <p class="product__price">
+          <span class="price" data-testid="product-price"><%= formatSum(product.price) %></span>
+<% if (product.old_price) { -%>
+          <s class="price price--old"><span class="visually-hidden">Старая цена: </span><%= formatSum(product.old_price) %></s>
+<% } -%>
+<% if (product.weight_g && product.roast) { -%>
+          <span class="product__unit">за <%= product.weight_g %> г</span>
+<% } -%>
+        </p>
+
+<% if (product.in_stock) { -%>
+        <p class="stock <%= low ? 'stock--low' : 'stock--ok' %>"><span class="stock__dot" aria-hidden="true"></span><%= low ? `Осталось ${product.stock} шт. — успейте заказать` : 'В наличии, обжарка этой недели' %></p>
+        <form class="buy" method="post" action="/cart/add" data-cart-add data-cart-add-label>
+          <%- csrfField %>
+          <input type="hidden" name="product_id" value="<%= product.id %>">
+          <input type="hidden" name="redirect" value="<%= currentUrl %>">
+          <div class="qty" data-qty>
+            <button class="qty__btn" type="button" data-qty-dec aria-label="Уменьшить количество"><%- icon('minus', { size: 18 }) %></button>
+            <label class="visually-hidden" for="buy-qty">Количество</label>
+            <input class="qty__input" id="buy-qty" type="number" name="qty" value="1" min="1" max="<%= maxQty %>" step="1" inputmode="numeric">
+            <button class="qty__btn" type="button" data-qty-inc aria-label="Увеличить количество"><%- icon('plus', { size: 18 }) %></button>
+          </div>
+          <button class="btn btn--primary btn--lg buy__submit" type="submit" data-testid="add-to-cart">
+            <%- icon('bag', { size: 20 }) %><span data-cart-add-text>В корзину</span>
+          </button>
+        </form>
+<% if (inCart) { -%>
+        <p class="in-cart"><%- icon('check', { size: 16 }) %>Уже в корзине: <%= inCart %> шт. <a href="/cart">Перейти в корзину</a></p>
+<% } -%>
+<% } else { -%>
+        <p class="stock stock--out"><span class="stock__dot" aria-hidden="true"></span>Нет в наличии</p>
+        <p class="product__out">Новая партия уже в пути. <a href="/contacts#form">Напишите нам</a> — сообщим, как только обжарим.</p>
+<% } -%>
+      </div>
+
+<% if (perks.length) { -%>
+      <ul class="perks">
+<% const perkIcons = ['flame', 'truck', 'grind']; -%>
+<% perks.forEach((perk, i) => { -%>
+        <li><%- icon(perkIcons[i] || 'check', { size: 20 }) %><span><%= perk %></span></li>
+<% }) -%>
+      </ul>
+<% } -%>
+
+<% if (specs.length) { -%>
+      <dl class="specs">
+<% specs.forEach(([label, value]) => { -%>
+        <div><dt><%= label %></dt><dd><%= value %></dd></div>
+<% }) -%>
+      </dl>
+<% } -%>
+    </div>
+  </section>
+
+<% if (product.details_html) { -%>
+  <section class="section section--tight">
+    <div class="container product-details">
+      <div class="prose" data-reveal>
+        <h2 class="visually-hidden">Описание</h2>
+        <%- product.details_html %>
+      </div>
+<% if (c.product_help_title) { -%>
+      <aside class="help-card" data-reveal>
+        <h2 class="help-card__title"><%= c.product_help_title %></h2>
+        <p><%= c.product_help_text %></p>
+        <p class="cluster">
+          <a class="btn btn--dark" href="/contacts#form">Написать нам</a>
+<% if (tgLink) { -%>
+          <a class="btn btn--ghost" href="<%= tgLink %>" target="_blank" rel="noopener"><%- icon('telegram', { size: 18 }) %>Telegram</a>
+<% } -%>
+        </p>
+      </aside>
+<% } -%>
+    </div>
+  </section>
+<% } -%>
+
+<% if (related.length) { -%>
+  <section class="section section--alt" aria-labelledby="related-title">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <h2 class="section-head__title" id="related-title"><%= c.related_title || 'С этим берут' %></h2>
+        <a class="link-arrow" href="/catalog">Весь каталог<%- icon('arrow', { size: 18 }) %></a>
+      </div>
+      <div class="pgrid">
+<% related.forEach((p) => { -%>
+        <%- include('partials/product-card', { p }) %>
+<% }) -%>
+      </div>
+    </div>
+  </section>
+<% } -%>
+</main>
+
+<%- include('partials/foot') %>

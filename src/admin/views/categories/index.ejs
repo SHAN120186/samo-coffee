@@ -1,0 +1,46 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Категории</h1>
+    <p class="page-head__sub">Разделы каталога. Перетаскивайте строки за маркер, чтобы изменить порядок на сайте.</p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn btn--primary" href="/admin/categories/new"><%- icon('plus', 15) %> Добавить категорию</a>
+  </div>
+</div>
+
+<section class="panel">
+  <% if (categories.length) { %>
+    <div class="table-wrap">
+      <table class="table" data-reorder-url="/admin/categories/reorder">
+        <thead><tr><th style="width: 2.5rem"><span class="visually-hidden">Порядок</span></th><th>Категория</th><th>Адрес</th><th class="num">Товаров</th><th>Статус</th><th><span class="visually-hidden">Действия</span></th></tr></thead>
+        <tbody>
+          <% categories.forEach((c) => { %>
+            <tr data-id="<%= c.id %>" class="<%= c.active ? '' : 'is-muted' %>">
+              <td><span class="grip" tabindex="0" role="button" title="Перетащите, чтобы изменить порядок (или стрелки ↑ ↓)" aria-label="Изменить порядок: <%= c.title %>"><%- icon('grip', 16) %></span></td>
+              <td>
+                <div class="cell-product">
+                  <img class="thumb" src="<%= c.image || '/img/placeholder.svg' %>" alt="" loading="lazy" width="44" height="44">
+                  <div><a class="t-main" href="/admin/categories/<%= c.id %>"><%= c.title %></a><span class="t-sub"><%= truncate(c.description, 90) || '—' %></span></div>
+                </div>
+              </td>
+              <td><a href="/catalog?category=<%= encodeURIComponent(c.slug) %>" target="_blank" rel="noopener"><code>/catalog?category=<%= c.slug %></code></a></td>
+              <td class="num"><a href="/admin/products?category=<%= c.id %>"><%= c.total_products %></a><% if (c.total_products !== c.product_count) { %><span class="t-sub"><%= c.product_count %> на сайте</span><% } %></td>
+              <td><span class="<%= c.active ? 'badge badge--success' : 'badge' %>"><%= c.active ? 'На сайте' : 'Скрыта' %></span></td>
+              <td class="t-actions">
+                <a class="btn btn--sm btn--quiet btn--icon" href="/admin/categories/<%= c.id %>" title="Редактировать" aria-label="Редактировать"><%- icon('edit', 15) %></a>
+                <form method="post" action="/admin/categories/<%= c.id %>/delete" data-confirm="Удалить категорию «<%= c.title %>»? Товары останутся в каталоге без категории.">
+                  <%- csrfField %>
+                  <button class="btn btn--sm btn--quiet btn--icon" type="submit" title="Удалить" aria-label="Удалить"><%- icon('trash', 15) %></button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } else { %>
+    <div class="empty"><span class="empty__icon"><%- icon('folder', 22) %></span><span class="empty__title">Категорий пока нет</span><p>Создайте разделы каталога — например, «Для эспрессо» и «Для фильтра».</p><a class="btn btn--primary" href="/admin/categories/new"><%- icon('plus', 15) %> Добавить категорию</a></div>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

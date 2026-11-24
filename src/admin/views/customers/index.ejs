@@ -1,0 +1,48 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Клиенты</h1>
+    <p class="page-head__sub">Все, кто оформлял заказ на сайте, в боте или мини-приложении. Всего: <%= formatNumber(totalAll) %>.</p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn" href="/admin/customers/export.csv<%= qs({ search }) %>"><%- icon('download', 15) %> Экспорт в CSV</a>
+  </div>
+</div>
+
+<section class="panel">
+  <form class="toolbar" method="get" action="/admin/customers">
+    <div class="field toolbar__grow" style="max-width: 28rem">
+      <label class="field__label" for="f-search">Поиск</label>
+      <div class="search-input"><%- icon('search', 15) %><input class="input" type="search" id="f-search" name="search" value="<%= search %>" placeholder="Имя, телефон, e-mail или @username"></div>
+    </div>
+    <button class="btn btn--dark" type="submit">Найти</button>
+    <% if (search) { %><a class="btn btn--quiet" href="/admin/customers">Сбросить</a><% } %>
+  </form>
+
+  <% if (items.length) { %>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Клиент</th><th>Контакты</th><th>Источник</th><th class="num">Заказов</th><th class="num">Оплачено</th><th>Последний заказ</th><th>Клиент с</th></tr></thead>
+        <tbody>
+          <% items.forEach((c) => { %>
+            <tr>
+              <td><a class="t-main" href="/admin/customers/<%= c.id %>"><%= c.name || 'Без имени' %></a><% if (c.tg_username) { %><span class="t-sub">@<%= c.tg_username %></span><% } %></td>
+              <td class="t-nowrap"><%= c.phone ? formatPhone(c.phone) : '—' %><% if (c.email) { %><span class="t-sub"><%= c.email %></span><% } %></td>
+              <td><span class="<%= badgeClass('channel', c.source) %>"><%= sourceLabels[c.source] || c.source %></span></td>
+              <td class="num"><%= c.orders_count %></td>
+              <td class="num"><%= c.paid_total ? formatSum(c.paid_total) : '—' %></td>
+              <td class="t-nowrap"><%= c.last_order_at ? formatDateShort(c.last_order_at) : '—' %></td>
+              <td class="t-nowrap"><%= formatDateShort(c.created_at) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <%- include('../partials/pager') %>
+  <% } else if (search) { %>
+    <div class="empty"><span class="empty__icon"><%- icon('search', 22) %></span><span class="empty__title">Никого не нашли</span><p>Проверьте запрос: можно искать по имени, цифрам телефона, e-mail или нику в Telegram.</p><a class="btn" href="/admin/customers">Показать всех</a></div>
+  <% } else { %>
+    <div class="empty"><span class="empty__icon"><%- icon('users', 22) %></span><span class="empty__title">Клиентов пока нет</span><p>Карточка клиента создаётся автоматически при первом заказе.</p></div>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

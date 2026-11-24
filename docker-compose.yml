@@ -1,0 +1,24 @@
+# docker compose up -d --build
+# Put secrets (SESSION_SECRET, ADMIN_PASSWORD, BOT_TOKEN, payment keys …) into .env next to this file.
+services:
+  app:
+    build: .
+    image: samo-coffee:latest
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_PATH: /app/data/samo.db
+      UPLOAD_DIR: /app/public/uploads
+    ports:
+      - "3000:3000"
+    volumes:
+      - samo-data:/app/data
+      - samo-uploads:/app/public/uploads
+
+volumes:
+  samo-data:
+  samo-uploads:

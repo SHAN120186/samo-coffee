@@ -1,0 +1,34 @@
+<%- include('partials/head', { bodyClass: 'page-404' }) %>
+
+<main id="main">
+  <section class="section">
+    <div class="container notfound">
+<% if (c.image) { -%>
+      <img class="notfound__img" src="<%= c.image %>" alt="" width="900" height="700">
+<% } -%>
+      <div class="notfound__body">
+        <p class="eyebrow">Ошибка 404</p>
+        <h1><%= c.title %></h1>
+        <p class="lead"><%= c.text %></p>
+        <p class="cluster">
+          <a class="btn btn--primary btn--lg" href="/catalog">В каталог<%- icon('arrow', { size: 18 }) %></a>
+          <a class="btn btn--ghost btn--lg" href="/">На главную</a>
+        </p>
+      </div>
+    </div>
+  </section>
+
+<% if (suggestions.length) { -%>
+  <section class="section section--alt section--tight">
+    <div class="container">
+      <div class="pgrid">
+<% suggestions.forEach((p) => { -%>
+        <%- include('partials/product-card', { p, headingTag: 'h2' }) %>
+<% }) -%>
+      </div>
+    </div>
+  </section>
+<% } -%>
+</main>
+
+<%- include('partials/foot') %>

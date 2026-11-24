@@ -1,0 +1,54 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Медиатека</h1>
+    <p class="page-head__sub">Изображения для страниц, товаров и статей. Скопируйте адрес файла, чтобы вставить его в любое поле «Изображение».</p>
+  </div>
+</div>
+
+<section class="panel">
+  <form class="panel__body" method="post" action="/admin/media/upload?_csrf=<%= encodeURIComponent(csrfToken) %>" enctype="multipart/form-data">
+    <div class="dropzone" data-dropzone>
+      <span class="empty__icon"><%- icon('upload', 22) %></span>
+      <strong style="color: var(--color-text)">Перетащите изображения сюда или выберите файлы</strong>
+      <span>JPG, PNG, WebP, GIF или AVIF · до <%= maxMb %> МБ · до 10 файлов за раз</span>
+      <label class="visually-hidden" for="media-files">Файлы изображений</label>
+      <input type="file" id="media-files" name="files" accept="<%= accept %>" multiple required>
+      <noscript><button class="btn btn--primary" type="submit">Загрузить</button></noscript>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel__head"><h2>Файлы</h2><span class="muted"><%= formatNumber(pager.total) %></span></div>
+  <% if (items.length) { %>
+    <div class="media-grid">
+      <% items.forEach((m) => { %>
+        <article class="media-card">
+          <a class="media-card__img" href="<%= m.url %>" target="_blank" rel="noopener"><img src="<%= m.url %>" alt="<%= m.alt %>" loading="lazy"></a>
+          <div class="media-card__body">
+            <div class="media-card__name" title="<%= m.original_name || m.filename %>"><%= m.original_name || m.filename %></div>
+            <div class="media-card__meta"><%= formatBytes(m.size) %> · <%= formatDateShort(m.created_at) %></div>
+            <form method="post" action="/admin/media/<%= m.id %>" class="media-card__tools">
+              <%- csrfField %>
+              <label class="visually-hidden" for="alt-<%= m.id %>">Описание (alt)</label>
+              <input class="input input--sm grow" type="text" id="alt-<%= m.id %>" name="alt" value="<%= m.alt %>" maxlength="200" placeholder="Описание (alt)">
+              <button class="btn btn--sm btn--quiet btn--icon" type="submit" title="Сохранить описание" aria-label="Сохранить описание"><%- icon('check', 14) %></button>
+            </form>
+            <div class="media-card__tools">
+              <button class="btn btn--sm grow" type="button" data-copy="<%= m.url %>"><%- icon('copy', 14) %> Копировать адрес</button>
+              <form method="post" action="/admin/media/<%= m.id %>/delete" data-confirm="Удалить изображение «<%= m.original_name || m.filename %>»? На страницах, где оно использовалось, останется пустое место.">
+                <%- csrfField %>
+                <button class="btn btn--sm btn--quiet btn--icon" type="submit" title="Удалить" aria-label="Удалить"><%- icon('trash', 14) %></button>
+              </form>
+            </div>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+    <%- include('../partials/pager') %>
+  <% } else { %>
+    <div class="empty"><span class="empty__icon"><%- icon('image', 22) %></span><span class="empty__title">В медиатеке пока пусто</span><p>Загрузите первое изображение — оно появится здесь и в окне выбора картинок в редакторах.</p></div>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

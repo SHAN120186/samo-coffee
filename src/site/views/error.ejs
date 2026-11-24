@@ -1,0 +1,20 @@
+<%- include('partials/head', { bodyClass: 'page-404' }) %>
+
+<main id="main">
+  <section class="section">
+    <div class="container notfound notfound--plain">
+      <div class="notfound__body">
+        <p class="notfound__code" aria-hidden="true"><%= status %></p>
+        <p class="eyebrow">Ошибка <%= status %></p>
+        <h1><%= title %></h1>
+        <p class="lead"><%= text %></p>
+        <p class="cluster">
+          <a class="btn btn--primary btn--lg" href="/">На главную</a>
+          <a class="btn btn--ghost btn--lg" href="/contacts">Связаться с нами</a>
+        </p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<%- include('partials/foot') %>

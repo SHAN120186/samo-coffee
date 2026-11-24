@@ -1,0 +1,32 @@
+    </main>
+  </div>
+</div>
+
+<dialog id="confirm-dialog" aria-labelledby="confirm-title">
+  <form method="dialog">
+    <div class="dialog__body">
+      <h2 class="dialog__title" id="confirm-title">Подтвердите действие</h2>
+      <p class="dialog__text" data-confirm-text></p>
+    </div>
+    <div class="dialog__actions">
+      <button class="btn btn--ghost" value="cancel" type="submit">Отмена</button>
+      <button class="btn btn--danger" value="ok" type="submit" data-confirm-ok>Удалить</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="media-picker" class="picker" aria-labelledby="picker-title">
+  <div class="picker__head">
+    <h2 id="picker-title">Выберите изображение</h2>
+    <button class="btn btn--quiet btn--icon" type="button" data-picker-close aria-label="Закрыть"><%- icon('close') %></button>
+  </div>
+  <div class="picker__grid" data-picker-grid></div>
+</dialog>
+
+<div class="toasts" aria-live="polite"></div>
+<script src="/admin/js/admin.js?v=<%= assetV %>" defer></script>
+<% (locals.scripts || []).forEach((src) => { %>
+<script src="<%= src %>?v=<%= assetV %>" defer></script>
+<% }) %>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Заказы</h1>
+    <p class="page-head__sub">Заказы с сайта, из бота и мини-приложения. Смена статуса отправляет клиенту уведомление в Telegram, если он оформлял заказ через бота или мини-приложение.</p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn" href="<%= exportUrl %>"><%- icon('download', 15) %> Экспорт в CSV</a>
+  </div>
+</div>
+
+<section class="panel">
+  <nav class="tabs" aria-label="Статус заказа">
+    <a href="<%= statusLink('') %>"<%- filters.status ? '' : ' aria-current="true"' %>>Все <span class="count"><%= formatNumber(counts.all) %></span></a>
+    <% Object.entries(statuses).forEach(([key, label]) => { %>
+      <a href="<%= statusLink(key) %>"<%- filters.status === key ? ' aria-current="true"' : '' %>><%= label %> <span class="count"><%= formatNumber(counts[key] || 0) %></span></a>
+    <% }) %>
+  </nav>
+  <form class="toolbar" method="get" action="/admin/orders">
+    <% if (filters.status) { %><input type="hidden" name="status" value="<%= filters.status %>"><% } %>
+    <div class="field toolbar__grow">
+      <label class="field__label" for="f-search">Поиск</label>
+      <div class="search-input"><%- icon('search', 15) %><input class="input" type="search" id="f-search" name="search" value="<%= filters.search %>" placeholder="Номер, имя или телефон"></div>
+    </div>
+    <div class="field">
+      <label class="field__label" for="f-channel">Канал</label>
+      <select class="select" id="f-channel" name="channel">
+        <option value="">Все каналы</option>
+        <% Object.entries(channels).forEach(([k, v]) => { %><option value="<%= k %>"<%= filters.channel === k ? ' selected' : '' %>><%= v %></option><% }) %>
+      </select>
+    </div>
+    <div class="field">
+      <label class="field__label" for="f-payment">Оплата</label>
+      <select class="select" id="f-payment" name="payment">
+        <option value="">Любая</option>
+        <% Object.entries(paymentStatuses).forEach(([k, v]) => { %><option value="<%= k %>"<%= filters.paymentStatus === k ? ' selected' : '' %>><%= v %></option><% }) %>
+      </select>
+    </div>
+    <div class="field">
+      <label class="field__label" for="f-kind">Тип</label>
+      <select class="select" id="f-kind" name="kind">
+        <option value="">Все</option>
+        <% Object.entries(kinds).forEach(([k, v]) => { %><option value="<%= k %>"<%= filters.kind === k ? ' selected' : '' %>><%= v %></option><% }) %>
+      </select>
+    </div>
+    <div class="field">
+      <label class="field__label" for="f-from">С даты</label>
+      <input class="input" type="date" id="f-from" name="from" value="<%= filters.from %>">
+    </div>
+    <div class="field">
+      <label class="field__label" for="f-to">По дату</label>
+      <input class="input" type="date" id="f-to" name="to" value="<%= filters.to %>">
+    </div>
+    <button class="btn btn--dark" type="submit">Найти</button>
+    <% if (hasFilters) { %><a class="btn btn--quiet" href="/admin/orders">Сбросить</a><% } %>
+  </form>
+
+  <% if (items.length) { %>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>Заказ</th><th>Клиент</th><th>Состав</th><th>Канал</th><th>Статус</th><th>Оплата</th><th class="num">Сумма</th></tr>
+        </thead>
+        <tbody>
+          <% items.forEach((o) => { %>
+            <tr>
+              <td class="t-nowrap"><a class="t-main" href="/admin/orders/<%= o.id %>"><%= o.number %></a><span class="t-sub"><%= formatDateTime(o.created_at) %></span></td>
+              <td><%= o.customer_name || '—' %><span class="t-sub"><%= formatPhone(o.customer_phone) %></span></td>
+              <td class="t-nowrap"><%= o.kind === 'subscription' ? 'Подписка' : `${o.items_count} ${plural(o.items_count, ['товар', 'товара', 'товаров'])}` %><span class="t-sub"><%= o.delivery_method_label %></span></td>
+              <td><span class="<%= badgeClass('channel', o.channel) %>"><%= o.channel_label %></span></td>
+              <td><span class="<%= badgeClass('order', o.status) %>"><%= o.status_label %></span></td>
+              <td><span class="<%= badgeClass('payment', o.payment_status) %>"><%= o.payment_status_label %></span><% if (o.payment_provider && o.payment_status === 'paid') { %><span class="t-sub"><%= providerLabels[o.payment_provider] || o.payment_provider %></span><% } %></td>
+              <td class="num"><strong><%= formatSum(o.total) %></strong></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <%- include('../partials/pager') %>
+  <% } else if (hasFilters) { %>
+    <div class="empty"><span class="empty__icon"><%- icon('search', 22) %></span><span class="empty__title">Заказов с такими условиями нет</span><p>Измените фильтры или период.</p><a class="btn" href="/admin/orders">Сбросить фильтры</a></div>
+  <% } else { %>
+    <div class="empty"><span class="empty__icon"><%- icon('bag', 22) %></span><span class="empty__title">Заказов пока нет</span><p>Когда покупатель оформит заказ на сайте, в боте или мини-приложении, он появится здесь, а вам придёт уведомление в Telegram.</p></div>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

@@ -1,0 +1,114 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Товары</h1>
+    <p class="page-head__sub">Каталог магазина: цены, остатки, публикация на сайте и в мини-приложении.</p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn btn--primary" href="/admin/products/new"><%- icon('plus', 15) %> Добавить товар</a>
+  </div>
+</div>
+
+<section class="panel">
+  <form class="toolbar" method="get" action="/admin/products">
+    <div class="field toolbar__grow">
+      <label class="field__label" for="f-search">Поиск</label>
+      <div class="search-input"><%- icon('search', 15) %><input class="input" type="search" id="f-search" name="search" value="<%= filters.search || '' %>" placeholder="Название, описание, страна"></div>
+    </div>
+    <div class="field">
+      <label class="field__label" for="f-category">Категория</label>
+      <select class="select" id="f-category" name="category">
+        <option value="">Все категории</option>
+        <% categories.forEach((c) => { %><option value="<%= c.id %>"<%= String(filters.category) === String(c.id) ? ' selected' : '' %>><%= c.title %></option><% }) %>
+      </select>
+    </div>
+    <div class="field">
+      <label class="field__label" for="f-state">Публикация</label>
+      <select class="select" id="f-state" name="state">
+        <option value="">Любая</option>
+        <% Object.entries(stateFilters).forEach(([k, v]) => { %><option value="<%= k %>"<%= filters.state === k ? ' selected' : '' %>><%= v %></option><% }) %>
+      </select>
+    </div>
+    <div class="field">
+      <label class="field__label" for="f-stock">Остаток</label>
+      <select class="select" id="f-stock" name="stock">
+        <option value="">Любой</option>
+        <% Object.entries(stockFilters).forEach(([k, v]) => { %><option value="<%= k %>"<%= filters.stock === k ? ' selected' : '' %>><%= v %></option><% }) %>
+      </select>
+    </div>
+    <div class="field">
+      <label class="field__label" for="f-sort">Сортировка</label>
+      <select class="select" id="f-sort" name="sort">
+        <option value="">Как на сайте</option>
+        <% Object.entries(sorts).forEach(([k, v]) => { %><option value="<%= k %>"<%= filters.sort === k ? ' selected' : '' %>><%= v %></option><% }) %>
+      </select>
+    </div>
+    <button class="btn btn--dark" type="submit">Найти</button>
+    <% if (hasFilters) { %><a class="btn btn--quiet" href="/admin/products">Сбросить</a><% } %>
+  </form>
+
+  <% if (products.length) { %>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Товар</th><th>Категория</th><th class="num">Цена</th><th class="num">Остаток</th><th class="num">Продано</th>
+            <th class="t-center">На сайте</th><th class="t-center">Рекомендуем</th><th><span class="visually-hidden">Действия</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% products.forEach((p) => { %>
+            <tr class="<%= p.active ? '' : 'is-muted' %>">
+              <td>
+                <div class="cell-product">
+                  <img class="thumb" src="<%= p.image %>" alt="" loading="lazy" width="44" height="44">
+                  <div>
+                    <a class="t-main" href="/admin/products/<%= p.id %>"><%= p.title %></a>
+                    <span class="t-sub"><%= p.subtitle || p.origin || '—' %></span>
+                  </div>
+                </div>
+              </td>
+              <td><%= p.category_title || '—' %></td>
+              <td class="num">
+                <%= formatSum(p.price) %>
+                <% if (p.old_price) { %><span class="t-sub"><s><%= formatSum(p.old_price) %></s></span><% } %>
+              </td>
+              <td class="num">
+                <% if (p.stock <= 0) { %><span class="badge badge--danger">нет</span>
+                <% } else if (p.stock <= 5) { %><span class="badge badge--warning"><%= p.stock %> шт.</span>
+                <% } else { %><%= formatNumber(p.stock) %> шт.<% } %>
+              </td>
+              <td class="num"><%= formatNumber(p.sold) %></td>
+              <td class="t-center">
+                <form method="post" action="/admin/products/<%= p.id %>/toggle">
+                  <%- csrfField %><input type="hidden" name="field" value="active"><input type="hidden" name="_back" value="<%= pager.link(pager.page) %>">
+                  <button class="switch" type="submit" aria-pressed="<%= p.active ? 'true' : 'false' %>" title="<%= p.active ? 'Скрыть с сайта' : 'Опубликовать' %>" aria-label="<%= p.title %>: <%= p.active ? 'опубликован' : 'скрыт' %>"><span class="switch__track"></span></button>
+                </form>
+              </td>
+              <td class="t-center">
+                <form method="post" action="/admin/products/<%= p.id %>/toggle">
+                  <%- csrfField %><input type="hidden" name="field" value="featured"><input type="hidden" name="_back" value="<%= pager.link(pager.page) %>">
+                  <button class="switch" type="submit" aria-pressed="<%= p.featured ? 'true' : 'false' %>" title="<%= p.featured ? 'Убрать из рекомендуемых' : 'Показывать на главной' %>" aria-label="<%= p.title %>: <%= p.featured ? 'рекомендуется' : 'не рекомендуется' %>"><span class="switch__track"></span></button>
+                </form>
+              </td>
+              <td class="t-actions">
+                <a class="btn btn--sm btn--quiet btn--icon" href="<%= p.url %>" target="_blank" rel="noopener" title="Открыть на сайте" aria-label="Открыть на сайте"><%- icon('external', 15) %></a>
+                <a class="btn btn--sm btn--quiet btn--icon" href="/admin/products/<%= p.id %>" title="Редактировать" aria-label="Редактировать"><%- icon('edit', 15) %></a>
+                <form method="post" action="/admin/products/<%= p.id %>/delete" data-confirm="Удалить товар «<%= p.title %>»? В оформленных заказах он останется, но с сайта исчезнет.">
+                  <%- csrfField %>
+                  <button class="btn btn--sm btn--quiet btn--icon" type="submit" title="Удалить" aria-label="Удалить"><%- icon('trash', 15) %></button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <%- include('../partials/pager') %>
+  <% } else if (hasFilters) { %>
+    <div class="empty"><span class="empty__icon"><%- icon('search', 22) %></span><span class="empty__title">Ничего не найдено</span><p>Попробуйте изменить запрос или сбросить фильтры.</p><a class="btn" href="/admin/products">Сбросить фильтры</a></div>
+  <% } else { %>
+    <div class="empty"><span class="empty__icon"><%- icon('box', 22) %></span><span class="empty__title">В каталоге пока нет товаров</span><p>Добавьте первый товар — он сразу появится на сайте и в мини-приложении.</p><a class="btn btn--primary" href="/admin/products/new"><%- icon('plus', 15) %> Добавить товар</a></div>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

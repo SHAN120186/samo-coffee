@@ -1,0 +1,51 @@
+<%- include('partials/head', { bodyClass: 'page-faq' }) %>
+<% const anchor = (i) => `topic-${i + 1}`; -%>
+
+<main id="main">
+  <section class="page-hero">
+    <div class="container">
+      <h1 class="page-hero__title"><%= c.title %></h1>
+<% if (c.intro) { -%>
+      <p class="lead"><%= c.intro %></p>
+<% } -%>
+    </div>
+  </section>
+
+  <section class="section section--flush-top">
+    <div class="container faq">
+<% if (groups.length > 1) { -%>
+      <nav class="faq__nav" aria-label="Темы">
+        <ul>
+<% groups.forEach((group, i) => { -%>
+          <li><a href="#<%= anchor(i) %>"><%= group.topic || 'Общие вопросы' %><span><%= group.items.length %></span></a></li>
+<% }) -%>
+        </ul>
+      </nav>
+<% } -%>
+      <div class="faq__groups">
+<% if (!groups.length) { -%>
+        <div class="empty"><p class="empty__text">Вопросы скоро появятся. А пока — <a href="/contacts#form">напишите нам</a>.</p></div>
+<% } -%>
+<% groups.forEach((group, i) => { -%>
+        <section class="faq-group" id="<%= anchor(i) %>" aria-labelledby="<%= anchor(i) %>-title">
+          <h2 class="faq-group__title" id="<%= anchor(i) %>-title"><%= group.topic || 'Общие вопросы' %></h2>
+          <div class="acc-list">
+<% group.items.forEach((item) => { -%>
+            <details class="acc">
+              <summary><span><%= item.question %></span><span class="acc__icon" aria-hidden="true"><%- icon('plus', { size: 18 }) %></span></summary>
+              <div class="acc__body prose"><%- item.answer %></div>
+            </details>
+<% }) -%>
+          </div>
+        </section>
+<% }) -%>
+      </div>
+    </div>
+  </section>
+
+<% if (c.cta_title) { -%>
+  <%- include('partials/cta-band', { title: c.cta_title, text: c.cta_text, buttonText: c.cta_button_text, buttonLink: '/contacts#form', tone: 'dark' }) %>
+<% } -%>
+</main>
+
+<%- include('partials/foot') %>

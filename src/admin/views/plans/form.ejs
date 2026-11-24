@@ -1,0 +1,69 @@
+<%- include('../partials/head') %>
+<%
+  const action = isNew ? '/admin/plans' : `/admin/plans/${plan.id}`;
+  const err = (name) => fields[name] ? `<span class="field__error">${escapeHtml(fields[name])}</span>` : '';
+  const inv = (name) => fields[name] ? ' field--invalid' : '';
+-%>
+<div class="page-head">
+  <div>
+    <a class="back-link" href="/admin/plans"><%- icon('left', 14) %> Все планы</a>
+    <h1><%= isNew ? 'Новый план подписки' : plan.title %></h1>
+  </div>
+</div>
+<%- include('../partials/form-error') %>
+
+<form method="post" action="<%= action %>" novalidate style="max-width: 52rem">
+  <%- csrfField %>
+  <section class="panel">
+    <div class="panel__body form-grid form-grid--3">
+      <div class="field span-2<%- inv('title') %>">
+        <label class="field__label" for="pl-title">Название <span class="req">*</span></label>
+        <input class="input" type="text" id="pl-title" name="title" value="<%= plan.title %>" maxlength="120" required>
+        <%- err('title') %>
+      </div>
+      <div class="field">
+        <label class="field__label" for="pl-badge">Метка</label>
+        <input class="input" type="text" id="pl-badge" name="badge" value="<%= plan.badge %>" maxlength="40" placeholder="Хит">
+      </div>
+      <div class="field span-all">
+        <label class="field__label" for="pl-description">Описание</label>
+        <textarea class="textarea" id="pl-description" name="description" rows="2" maxlength="1000"><%= plan.description %></textarea>
+      </div>
+      <div class="field<%- inv('price') %>">
+        <label class="field__label" for="pl-price">Цена за период <span class="req">*</span></label>
+        <div class="input-group"><input class="input input--num" type="text" inputmode="numeric" id="pl-price" name="price" value="<%= plan.price %>" maxlength="10" required><span class="input-group__addon">сум</span></div>
+        <%- err('price') %>
+      </div>
+      <div class="field<%- inv('period_days') %>">
+        <label class="field__label" for="pl-period">Период <span class="req">*</span></label>
+        <div class="input-group"><input class="input input--num" type="text" inputmode="numeric" id="pl-period" name="period_days" value="<%= plan.period_days %>" maxlength="3"><span class="input-group__addon">дней</span></div>
+        <%- err('period_days') || '<span class="field__hint">На столько продлевается подписка после оплаты</span>' %>
+      </div>
+      <div class="field">
+        <label class="field__label" for="pl-sort">Порядок</label>
+        <input class="input input--num" type="text" inputmode="numeric" id="pl-sort" name="sort" value="<%= plan.sort %>" maxlength="5">
+      </div>
+      <div class="field span-all">
+        <label class="field__label" for="pl-perks">Что входит</label>
+        <textarea class="textarea" id="pl-perks" name="perks" rows="5" maxlength="2400" placeholder="2 пачки по 250 г в месяц&#10;Бесплатная доставка&#10;Скидка 10 % на каталог"><%= (plan.perks || []).join('\n') %></textarea>
+        <span class="field__hint">Каждое преимущество — с новой строки, до 12 пунктов</span>
+      </div>
+      <div class="span-all">
+        <%- include('../partials/image-field', { name: 'image', value: plan.image, label: 'Изображение', id: 'pl-image', hint: '', error: fields.image || null }) %>
+      </div>
+      <div class="field<%- inv('slug') %>">
+        <label class="field__label" for="pl-slug">Адрес</label>
+        <input class="input" type="text" id="pl-slug" name="slug" value="<%= plan.slug %>" maxlength="120" placeholder="создастся из названия" autocomplete="off">
+        <%- err('slug') %>
+      </div>
+      <div class="span-2" style="align-self: end; padding-bottom: 0.4rem">
+        <label class="switch"><input type="checkbox" name="active" value="1"<%= plan.active ? ' checked' : '' %>><span class="switch__track"></span><span>Доступен для оформления</span></label>
+      </div>
+    </div>
+  </section>
+  <div class="form-actions">
+    <button class="btn btn--primary" type="submit"><%- icon('check', 15) %> <%= isNew ? 'Создать план' : 'Сохранить' %></button>
+    <a class="btn btn--ghost" href="/admin/plans">Отмена</a>
+  </div>
+</form>
+<%- include('../partials/foot') %>

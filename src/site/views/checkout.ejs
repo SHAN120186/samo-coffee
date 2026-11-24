@@ -1,0 +1,106 @@
+<%- include('partials/head', { bodyClass: 'page-checkout' }) %>
+<%
+  const isPickup = values.method === 'pickup';
+  const deliveryFee = isPickup ? 0 : courierFee;
+  const errorList = Object.values(errors);
+-%>
+
+<main id="main">
+  <section class="page-hero page-hero--compact">
+    <div class="container">
+      <a class="link-arrow link-arrow--back" href="/cart"><%- icon('arrow-left', { size: 18 }) %>Вернуться в корзину</a>
+      <h1 class="page-hero__title"><%= c.title %></h1>
+<% if (c.note) { -%>
+      <p class="lead"><%= c.note %></p>
+<% } -%>
+    </div>
+  </section>
+
+  <section class="section section--flush-top">
+    <div class="container checkout">
+      <form class="checkout__form" method="post" action="/checkout" novalidate data-checkout data-courier-fee="<%= courierFee %>" data-subtotal="<%= cart.subtotal %>">
+        <%- csrfField %>
+<% if (errorList.length) { -%>
+        <div class="alert alert--error" role="alert" data-testid="checkout-errors">
+          <strong>Проверьте форму:</strong> <%= errorList.join('. ') %>.
+        </div>
+<% } -%>
+
+        <fieldset class="form-section">
+          <legend><span class="form-section__num">1</span>Контактные данные</legend>
+          <div class="form-grid">
+            <%- include('partials/field', { name: 'name', label: 'Имя', value: values.name, error: errors.name, autocomplete: 'name', required: true, maxlength: 120, placeholder: 'Как к вам обращаться' }) %>
+            <%- include('partials/field', { name: 'phone', label: 'Телефон', type: 'tel', value: values.phone, error: errors.phone, autocomplete: 'tel', inputmode: 'tel', required: true, maxlength: 40, placeholder: '+998 90 123 45 67' }) %>
+            <%- include('partials/field', { name: 'email', label: 'E-mail', type: 'email', value: values.email, error: errors.email, autocomplete: 'email', maxlength: 160, placeholder: 'you@example.com', hint: 'Пришлём на него детали заказа', wide: true }) %>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-section">
+          <legend><span class="form-section__num">2</span>Способ получения</legend>
+          <div class="choice" role="radiogroup" aria-label="Способ получения">
+            <label class="choice__item">
+              <input type="radio" name="method" value="courier"<%= isPickup ? '' : ' checked' %> data-method>
+              <span class="choice__card">
+                <span class="choice__icon"><%- icon('truck', { size: 22 }) %></span>
+                <span class="choice__body">
+                  <strong>Курьером по Ташкенту</strong>
+                  <small><%= settings.delivery_note %></small>
+                </span>
+                <span class="choice__price"><%= courierFee ? formatSum(courierFee) : 'Бесплатно' %></span>
+              </span>
+            </label>
+            <label class="choice__item">
+              <input type="radio" name="method" value="pickup"<%= isPickup ? ' checked' : '' %> data-method>
+              <span class="choice__card">
+                <span class="choice__icon"><%- icon('pin', { size: 22 }) %></span>
+                <span class="choice__body">
+                  <strong>Самовывоз</strong>
+                  <small><%= settings.pickup_address %></small>
+                </span>
+                <span class="choice__price">Бесплатно</span>
+              </span>
+            </label>
+          </div>
+          <div class="form-grid" data-address-wrap<% if (isPickup) { %> data-hidden-initial<% } %>>
+            <%- include('partials/field', { name: 'address', label: 'Адрес доставки', value: values.address, error: errors.address, autocomplete: 'street-address', required: true, maxlength: 300, placeholder: 'Улица, дом, квартира, ориентир', wide: true }) %>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-section">
+          <legend><span class="form-section__num">3</span>Комментарий к заказу</legend>
+          <div class="form-grid">
+            <%- include('partials/field', { name: 'comment', label: 'Комментарий', type: 'textarea', value: values.comment, error: errors.comment, maxlength: 1000, rows: 3, placeholder: 'Помол под воронку, удобное время доставки, код домофона…', wide: true }) %>
+          </div>
+        </fieldset>
+
+        <div class="checkout__submit">
+          <button class="btn btn--primary btn--lg" type="submit" data-testid="place-order">Перейти к оплате · <span data-total><%= formatSum(cart.subtotal + deliveryFee) %></span></button>
+<% if (c.agreement) { -%>
+          <p class="checkout__agreement"><%= c.agreement %></p>
+<% } -%>
+        </div>
+      </form>
+
+      <aside class="summary" aria-label="Состав заказа">
+        <h2 class="summary__title">Ваш заказ</h2>
+        <ul class="summary__items">
+<% cart.items.forEach((item) => { -%>
+          <li class="summary__item">
+            <img src="<%= item.image %>" alt="" width="96" height="96" loading="lazy">
+            <span class="summary__item-title"><%= item.title %><small><%= item.qty %> × <%= formatSum(item.price) %></small></span>
+            <span class="price"><%= formatSum(item.line_total) %></span>
+          </li>
+<% }) -%>
+        </ul>
+        <dl class="summary__rows">
+          <div class="summary__row"><dt>Товары</dt><dd><%= formatSum(cart.subtotal) %></dd></div>
+          <div class="summary__row"><dt>Доставка</dt><dd data-delivery><%= deliveryFee ? formatSum(deliveryFee) : 'Бесплатно' %></dd></div>
+          <div class="summary__row summary__row--total"><dt>К оплате</dt><dd data-total data-testid="checkout-total"><%= formatSum(cart.subtotal + deliveryFee) %></dd></div>
+        </dl>
+        <p class="summary__secure"><%- icon('card', { size: 18 }) %>Оплата на защищённой странице платёжной системы</p>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<%- include('partials/foot') %>

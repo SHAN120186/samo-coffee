@@ -1,0 +1,48 @@
+<%- include('../partials/head') %>
+<%
+  const action = isNew ? '/admin/faq' : `/admin/faq/${item.id}`;
+  const err = (name) => fields[name] ? `<span class="field__error">${escapeHtml(fields[name])}</span>` : '';
+  const inv = (name) => fields[name] ? ' field--invalid' : '';
+-%>
+<div class="page-head">
+  <div>
+    <a class="back-link" href="/admin/faq"><%- icon('left', 14) %> Все вопросы</a>
+    <h1><%= isNew ? 'Новый вопрос' : 'Редактирование вопроса' %></h1>
+  </div>
+</div>
+<%- include('../partials/form-error') %>
+
+<form method="post" action="<%= action %>" novalidate style="max-width: 52rem" data-guard>
+  <%- csrfField %>
+  <section class="panel">
+    <div class="panel__body form-grid form-grid--3">
+      <div class="field span-all<%- inv('question') %>">
+        <label class="field__label" for="faq-question">Вопрос <span class="req">*</span></label>
+        <input class="input" type="text" id="faq-question" name="question" value="<%= item.question %>" maxlength="300" required>
+        <%- err('question') %>
+      </div>
+      <div class="field span-all">
+        <label class="field__label" for="faq-answer">Ответ</label>
+        <%- include('../partials/editor', { name: 'answer', value: item.answer, id: 'faq-answer', tall: false, placeholder: 'Ответ на вопрос…' }) %>
+      </div>
+      <div class="field">
+        <label class="field__label" for="faq-topic">Тема</label>
+        <input class="input" type="text" id="faq-topic" name="topic" value="<%= item.topic %>" maxlength="80" list="faq-topics" placeholder="Доставка">
+        <datalist id="faq-topics"><% topics.forEach((t) => { %><option value="<%= t %>"><% }) %></datalist>
+        <span class="field__hint">Вопросы с одной темой группируются на сайте</span>
+      </div>
+      <div class="field">
+        <label class="field__label" for="faq-sort">Позиция</label>
+        <input class="input input--num" type="text" inputmode="numeric" id="faq-sort" name="sort" value="<%= item.sort %>" maxlength="5" placeholder="в конец списка">
+      </div>
+      <div style="align-self: center; padding-top: 1rem">
+        <label class="switch"><input type="checkbox" name="active" value="1"<%= item.active ? ' checked' : '' %>><span class="switch__track"></span><span>Показывать на сайте</span></label>
+      </div>
+    </div>
+  </section>
+  <div class="form-actions">
+    <button class="btn btn--primary" type="submit"><%- icon('check', 15) %> <%= isNew ? 'Добавить вопрос' : 'Сохранить' %></button>
+    <a class="btn btn--ghost" href="/admin/faq">Отмена</a>
+  </div>
+</form>
+<%- include('../partials/foot', { scripts: ['/admin/js/editor.js'] }) %>

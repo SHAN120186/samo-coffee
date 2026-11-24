@@ -1,0 +1,10 @@
+<%- include('partials/head') %>
+<div class="error-page">
+  <div>
+    <div class="error-page__code"><%= code %></div>
+    <h1><%= title %></h1>
+    <p class="page-head__sub" style="margin: var(--space-3) auto var(--space-5)"><%= message %></p>
+    <a class="btn btn--primary" href="/admin">На дашборд</a>
+  </div>
+</div>
+<%- include('partials/foot') %>

@@ -1,0 +1,92 @@
+<%
+  const footSocials = [
+    { name: 'Telegram', icon: 'telegram', url: settings.social_telegram },
+    { name: 'Instagram', icon: 'instagram', url: settings.social_instagram },
+    { name: 'Facebook', icon: 'facebook', url: settings.social_facebook },
+    { name: 'YouTube', icon: 'youtube', url: settings.social_youtube },
+  ].filter((s) => s.url);
+  const footPhone = telHref(settings.phone);
+-%>
+  <footer class="footer">
+    <div class="container">
+<% if (tgLink) { -%>
+      <div class="footer__tg">
+        <div class="footer__tg-icon" aria-hidden="true"><%- icon('telegram', { size: 26 }) %></div>
+        <div class="footer__tg-text">
+          <p class="footer__tg-title"><%= g.tg_title %></p>
+          <p><%= g.tg_text %></p>
+        </div>
+        <a class="btn btn--primary" href="<%= tgLink %>" target="_blank" rel="noopener" data-testid="open-telegram"><%= g.tg_button_text || 'Открыть в Telegram' %><%- icon('arrow', { size: 18 }) %></a>
+      </div>
+<% } -%>
+
+      <div class="footer__grid">
+        <div class="footer__brand">
+          <a href="/" aria-label="<%= settings.site_name %> — на главную">
+            <img src="<%= g.logo_footer || '/img/logo-light.svg' %>" alt="<%= settings.site_name %>" width="158" height="40" loading="lazy">
+          </a>
+<% if (g.footer_about) { -%>
+          <p class="footer__about"><%= g.footer_about %></p>
+<% } -%>
+<% if (footSocials.length) { -%>
+          <ul class="footer__socials">
+<% footSocials.forEach((s) => { -%>
+            <li><a href="<%= s.url %>" target="_blank" rel="noopener" aria-label="<%= s.name %>"><%- icon(s.icon, { size: 20 }) %></a></li>
+<% }) -%>
+          </ul>
+<% } -%>
+        </div>
+
+        <nav class="footer__col" aria-label="Магазин">
+          <p class="footer__title">Магазин</p>
+          <ul>
+            <li><a href="/catalog">Каталог</a></li>
+            <li><a href="/subscriptions">Подписка на кофе</a></li>
+            <li><a href="/delivery">Доставка и оплата</a></li>
+            <li><a href="/faq">Вопросы и ответы</a></li>
+            <li><a href="/cart">Корзина</a></li>
+          </ul>
+        </nav>
+
+        <nav class="footer__col" aria-label="Компания">
+          <p class="footer__title">Компания</p>
+          <ul>
+            <li><a href="/about">О нас</a></li>
+            <li><a href="/blog">Журнал обжарщика</a></li>
+            <li><a href="/contacts">Контакты</a></li>
+            <li><a href="/contacts#form">Кофейням и офисам</a></li>
+          </ul>
+        </nav>
+
+        <div class="footer__col">
+          <p class="footer__title">Контакты</p>
+          <ul class="footer__contacts">
+<% if (settings.phone) { -%>
+            <li><%- icon('phone', { size: 18 }) %><a href="<%= footPhone %>"><%= settings.phone %></a></li>
+<% } -%>
+<% if (settings.email) { -%>
+            <li><%- icon('mail', { size: 18 }) %><a href="mailto:<%= settings.email %>"><%= settings.email %></a></li>
+<% } -%>
+<% if (settings.address) { -%>
+            <li><%- icon('pin', { size: 18 }) %><% if (settings.map_url) { %><a href="<%= settings.map_url %>" target="_blank" rel="noopener"><%= settings.address %></a><% } else { %><span><%= settings.address %></span><% } %></li>
+<% } -%>
+<% if (settings.work_hours) { -%>
+            <li><%- icon('clock', { size: 18 }) %><span><%= settings.work_hours %></span></li>
+<% } -%>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer__bottom">
+        <p><%= g.footer_note %></p>
+<% if (g.footer_payments_note) { -%>
+        <p><%= g.footer_payments_note %></p>
+<% } -%>
+      </div>
+    </div>
+  </footer>
+
+  <div class="toasts" data-toasts aria-live="polite" aria-atomic="true"></div>
+  <script src="/site/js/site.js?v=<%= assetVersion %>" defer></script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<%- include('../partials/head') %>
+<div class="page-head">
+  <div>
+    <h1>Планы подписки</h1>
+    <p class="page-head__sub">Тарифы кофейной подписки. Клиент оплачивает период — подписка активируется или продлевается автоматически.</p>
+  </div>
+  <div class="page-head__actions">
+    <a class="btn" href="/admin/subscriptions"><%- icon('repeat', 15) %> Подписчики</a>
+    <a class="btn btn--primary" href="/admin/plans/new"><%- icon('plus', 15) %> Добавить план</a>
+  </div>
+</div>
+
+<section class="kpis" aria-label="Подписки" style="grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 48rem">
+  <div class="kpi"><div class="kpi__label">Активные подписки</div><div class="kpi__value"><%= formatNumber(stats.active) %></div></div>
+  <div class="kpi"><div class="kpi__label">На паузе</div><div class="kpi__value"><%= formatNumber(stats.paused) %></div></div>
+  <div class="kpi"><div class="kpi__label">Регулярная выручка в месяц (MRR)</div><div class="kpi__value"><%= formatNumber(stats.mrr) %> <small>сум</small></div></div>
+</section>
+
+<section class="panel">
+  <% if (plans.length) { %>
+    <div class="table-wrap">
+      <table class="table" data-reorder-url="/admin/plans/reorder">
+        <thead><tr><th style="width: 2.5rem"><span class="visually-hidden">Порядок</span></th><th>План</th><th class="num">Цена</th><th class="num">Период</th><th class="num">Подписчиков</th><th>Статус</th><th><span class="visually-hidden">Действия</span></th></tr></thead>
+        <tbody>
+          <% plans.forEach((p) => { %>
+            <tr data-id="<%= p.id %>" class="<%= p.active ? '' : 'is-muted' %>">
+              <td><span class="grip" tabindex="0" role="button" title="Перетащите, чтобы изменить порядок (или стрелки ↑ ↓)" aria-label="Изменить порядок: <%= p.title %>"><%- icon('grip', 16) %></span></td>
+              <td>
+                <div class="cell-product">
+                  <img class="thumb" src="<%= p.image %>" alt="" loading="lazy" width="44" height="44">
+                  <div>
+                    <a class="t-main" href="/admin/plans/<%= p.id %>"><%= p.title %></a> <% if (p.badge) { %><span class="badge badge--accent"><%= p.badge %></span><% } %>
+                    <span class="t-sub"><%= truncate(p.description, 90) || `${p.perks.length} ${plural(p.perks.length, ['преимущество', 'преимущества', 'преимуществ'])}` %></span>
+                  </div>
+                </div>
+              </td>
+              <td class="num"><%= formatSum(p.price) %></td>
+              <td class="num"><%= p.period_days %> <%= plural(p.period_days, ['день', 'дня', 'дней']) %></td>
+              <td class="num"><a href="/admin/subscriptions?plan=<%= p.id %>&amp;status=active"><%= p.subscribers %></a></td>
+              <td><span class="<%= p.active ? 'badge badge--success' : 'badge' %>"><%= p.active ? 'В продаже' : 'Скрыт' %></span></td>
+              <td class="t-actions">
+                <a class="btn btn--sm btn--quiet btn--icon" href="/admin/plans/<%= p.id %>" title="Редактировать" aria-label="Редактировать"><%- icon('edit', 15) %></a>
+                <form method="post" action="/admin/plans/<%= p.id %>/delete" data-confirm="Удалить план «<%= p.title %>»? Если у плана есть подписчики, он будет скрыт, а не удалён.">
+                  <%- csrfField %>
+                  <button class="btn btn--sm btn--quiet btn--icon" type="submit" title="Удалить" aria-label="Удалить"><%- icon('trash', 15) %></button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } else { %>
+    <div class="empty"><span class="empty__icon"><%- icon('calendar', 22) %></span><span class="empty__title">Планов подписки пока нет</span><p>Создайте первый тариф — например, «250 г каждые две недели».</p><a class="btn btn--primary" href="/admin/plans/new"><%- icon('plus', 15) %> Добавить план</a></div>
+  <% } %>
+</section>
+<%- include('../partials/foot') %>

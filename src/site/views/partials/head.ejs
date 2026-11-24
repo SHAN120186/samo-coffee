@@ -1,0 +1,123 @@
+<%
+  const m = locals.meta || {};
+  const siteName = settings.site_name;
+  const pageTitle = m.title || settings.seo_title || siteName;
+  const pageDescription = m.description || settings.seo_description || '';
+  const canonical = m.canonical || canonicalUrl;
+  const ogImage = abs(m.image || '/img/og.svg');
+  const phoneHref = telHref(settings.phone);
+-%>
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= pageTitle %></title>
+  <meta name="description" content="<%= pageDescription %>">
+<% if (m.noindex) { -%>
+  <meta name="robots" content="noindex, nofollow">
+<% } else { -%>
+  <link rel="canonical" href="<%= canonical %>">
+<% } -%>
+  <meta property="og:site_name" content="<%= siteName %>">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:type" content="<%= m.type === 'article' ? 'article' : m.type === 'product' ? 'product' : 'website' %>">
+  <meta property="og:title" content="<%= pageTitle %>">
+  <meta property="og:description" content="<%= pageDescription %>">
+  <meta property="og:url" content="<%= canonical %>">
+  <meta property="og:image" content="<%= ogImage %>">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="<%= pageTitle %>">
+  <meta name="twitter:description" content="<%= pageDescription %>">
+  <meta name="twitter:image" content="<%= ogImage %>">
+  <meta name="theme-color" content="#2a1a12">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="csrf-token" content="<%= csrfToken %>">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/fonts/playfair-display/playfair-display-cyrillic-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/fonts/manrope/manrope-cyrillic-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/css/tokens.css?v=<%= assetVersion %>">
+  <link rel="stylesheet" href="/site/css/site.css?v=<%= assetVersion %>">
+  <script nonce="<%= cspNonce %>">document.documentElement.classList.add('js');</script>
+<% (m.jsonLd || []).forEach((ld) => { -%>
+  <script type="application/ld+json" nonce="<%= cspNonce %>"><%- jsonForScript(ld) %></script>
+<% }) -%>
+</head>
+<body<% if (locals.bodyClass) { %> class="<%= bodyClass %>"<% } %>>
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+
+<% if (g.announcement) { -%>
+  <div class="announce">
+    <div class="container announce__inner">
+      <span class="announce__dot" aria-hidden="true"></span>
+      <p><%= g.announcement %></p>
+    </div>
+  </div>
+<% } -%>
+
+  <header class="header" data-header>
+    <div class="container header__inner">
+      <a class="header__logo" href="/" aria-label="<%= siteName %> — на главную">
+        <img src="<%= g.logo || '/img/logo.svg' %>" alt="<%= siteName %>" width="143" height="36">
+      </a>
+
+      <nav class="nav" aria-label="Основная навигация">
+        <ul class="nav__list">
+<% nav.forEach((item) => { const active = isActive(item.href); -%>
+          <li><a class="nav__link<%= active ? ' is-active' : '' %>" href="<%= item.href %>"<% if (active) { %> aria-current="page"<% } %>><%= item.label %></a></li>
+<% }) -%>
+        </ul>
+      </nav>
+
+      <div class="header__actions">
+<% if (settings.phone && phoneHref) { -%>
+        <a class="header__phone" href="<%= phoneHref %>"><%= settings.phone %></a>
+<% } -%>
+<% if (g.header_cta_text && g.header_cta_link) { -%>
+        <a class="btn btn--dark btn--sm header__cta" href="<%= g.header_cta_link %>"><%= g.header_cta_text %></a>
+<% } -%>
+        <a class="icon-btn cart-link" href="/cart" aria-label="Корзина, товаров: <%= cartCount %>" data-cart-link>
+          <%- icon('bag', { size: 22 }) %>
+          <span class="cart-link__count" data-cart-count<% if (!cartCount) { %> hidden<% } %>><%= cartCount %></span>
+        </a>
+        <details class="mnav" data-mnav>
+          <summary class="icon-btn mnav__toggle" aria-label="Меню">
+            <span class="mnav__open"><%- icon('menu', { size: 22 }) %></span>
+            <span class="mnav__close"><%- icon('close', { size: 22 }) %></span>
+          </summary>
+          <div class="mnav__panel">
+            <nav aria-label="Мобильная навигация">
+              <ul class="mnav__list">
+<% nav.forEach((item) => { const active = isActive(item.href); -%>
+                <li><a class="mnav__link<%= active ? ' is-active' : '' %>" href="<%= item.href %>"<% if (active) { %> aria-current="page"<% } %>><%= item.label %><%- icon('arrow', { size: 18 }) %></a></li>
+<% }) -%>
+                <li><a class="mnav__link<%= isActive('/faq') ? ' is-active' : '' %>" href="/faq">Вопросы и ответы<%- icon('arrow', { size: 18 }) %></a></li>
+              </ul>
+            </nav>
+            <div class="mnav__foot">
+<% if (g.header_cta_text && g.header_cta_link) { -%>
+              <a class="btn btn--primary btn--block" href="<%= g.header_cta_link %>"><%= g.header_cta_text %></a>
+<% } -%>
+<% if (tgLink) { -%>
+              <a class="btn btn--ghost btn--block" href="<%= tgLink %>" target="_blank" rel="noopener"><%- icon('telegram', { size: 18 }) %><%= g.tg_button_text || 'Открыть в Telegram' %></a>
+<% } -%>
+<% if (settings.phone && phoneHref) { -%>
+              <a class="mnav__phone" href="<%= phoneHref %>"><%- icon('phone', { size: 18 }) %><%= settings.phone %></a>
+<% } -%>
+<% if (settings.work_hours) { -%>
+              <p class="mnav__hours"><%= settings.work_hours %></p>
+<% } -%>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+  </header>
+
+<% if (flash.length) { -%>
+  <div class="container flash-stack" role="status">
+<% flash.forEach((f) => { -%>
+    <div class="alert alert--<%= f.type %>" data-flash><%= f.message %><% if (f.type === 'success' && /в корзине$/.test(f.message) && currentPath !== '/cart') { %> <a href="/cart">Перейти в корзину</a><% } %></div>
+<% }) -%>
+  </div>
+<% } -%>

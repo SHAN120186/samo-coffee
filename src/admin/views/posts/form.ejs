@@ -1,0 +1,85 @@
+<%- include('../partials/head') %>
+<%
+  const action = isNew ? '/admin/posts' : `/admin/posts/${post.id}`;
+  const err = (name) => fields[name] ? `<span class="field__error">${escapeHtml(fields[name])}</span>` : '';
+  const inv = (name) => fields[name] ? ' field--invalid' : '';
+-%>
+<div class="page-head">
+  <div>
+    <a class="back-link" href="/admin/posts"><%- icon('left', 14) %> Все статьи</a>
+    <h1><%= isNew ? 'Новая статья' : post.title %></h1>
+    <% if (!isNew) { %><p class="page-head__sub"><span class="<%= post.published ? 'badge badge--success' : 'badge' %>"><%= post.published ? 'Опубликована' : 'Черновик' %></span> · <%= post.reading_min %> мин чтения · обновлена <%= formatDateTime(post.updated_at) %></p><% } %>
+  </div>
+  <div class="page-head__actions">
+    <% if (!isNew && post.published) { %><a class="btn" href="<%= post.url %>" target="_blank" rel="noopener"><%- icon('external', 15) %> Открыть на сайте</a><% } %>
+  </div>
+</div>
+<%- include('../partials/form-error') %>
+
+<form method="post" action="<%= action %>" id="post-form" data-guard novalidate>
+  <%- csrfField %>
+  <div class="cols cols--main">
+    <section class="panel">
+      <div class="panel__body stack-4">
+        <div class="field<%- inv('title') %>">
+          <label class="field__label" for="post-title">Заголовок <span class="req">*</span></label>
+          <input class="input" type="text" id="post-title" name="title" value="<%= post.title %>" maxlength="200" required style="font-size: var(--text-md); font-weight: 600; min-height: 2.75rem">
+          <%- err('title') %>
+        </div>
+        <div class="field">
+          <label class="field__label" for="post-body">Текст статьи</label>
+          <%- include('../partials/editor', { name: 'body_html', value: post.body_html, id: 'post-body', tall: true, placeholder: 'Начните писать статью…' }) %>
+        </div>
+        <div class="field">
+          <label class="field__label" for="post-excerpt">Анонс</label>
+          <textarea class="textarea" id="post-excerpt" name="excerpt" rows="3" maxlength="400" data-counter="excerpt-count"><%= post.excerpt %></textarea>
+          <span class="field__hint">Короткое описание для списка статей и поисковиков. Если оставить пустым, возьмём начало текста. <span id="excerpt-count"></span></span>
+        </div>
+      </div>
+    </section>
+
+    <div class="stack-4">
+      <section class="panel">
+        <div class="panel__head"><h2>Публикация</h2></div>
+        <div class="panel__body stack-4">
+          <label class="switch"><input type="checkbox" name="published" value="1"<%= post.published ? ' checked' : '' %>><span class="switch__track"></span><span>Опубликовать на сайте</span></label>
+          <div class="field<%- inv('published_date') %>">
+            <label class="field__label" for="post-date">Дата публикации</label>
+            <input class="input" type="date" id="post-date" name="published_date" value="<%= post.published_date || '' %>">
+            <%- err('published_date') || '<span class="field__hint">Пусто — подставим дату первой публикации</span>' %>
+          </div>
+          <div class="field">
+            <label class="field__label" for="post-author">Автор</label>
+            <input class="input" type="text" id="post-author" name="author" value="<%= post.author %>" maxlength="120">
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel__head"><h2>Обложка</h2></div>
+        <div class="panel__body">
+          <%- include('../partials/image-field', { name: 'cover', value: post.cover, label: '', id: 'post-cover', hint: 'Горизонтальное изображение, лучше от 1200 px по ширине', error: fields.cover || null }) %>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel__head"><h2>Адрес</h2></div>
+        <div class="panel__body">
+          <div class="field<%- inv('slug') %>">
+            <label class="field__label" for="post-slug">Адрес страницы</label>
+            <input class="input" type="text" id="post-slug" name="slug" value="<%= post.slug %>" maxlength="120" placeholder="создастся из заголовка" autocomplete="off">
+            <%- err('slug') || '<span class="field__hint">/blog/<b>адрес</b> — латиница, цифры и дефис</span>' %>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button class="btn btn--primary" type="submit"><%- icon('check', 15) %> Сохранить</button>
+    <a class="btn btn--ghost" href="/admin/posts">Отмена</a>
+    <% if (!isNew) { %><button class="btn btn--danger-quiet" type="submit" form="post-delete" style="margin-left: auto"><%- icon('trash', 15) %> Удалить</button><% } %>
+  </div>
+</form>
+<% if (!isNew) { %>
+  <form method="post" action="/admin/posts/<%= post.id %>/delete" id="post-delete" data-confirm="Удалить статью «<%= post.title %>»? Восстановить её не получится."><%- csrfField %></form>
+<% } %>
+<%- include('../partials/foot', { scripts: ['/admin/js/editor.js'] }) %>
