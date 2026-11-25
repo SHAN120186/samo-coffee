@@ -1,0 +1,22 @@
+<%- include('partials/head', { badge: 'Оплата в Telegram', badgeTone: 'info' }) %>
+    <div class="pay__card">
+<%- include('partials/summary') %>
+      <div class="pay__body">
+        <ol class="pay__steps">
+          <li>Откройте счёт в Telegram — он появится в приложении на этом устройстве.</li>
+          <li>Оплатите картой прямо в Telegram. Данные карты видит только платёжный сервис.</li>
+          <li>Вернитесь сюда: страница сама покажет, что заказ оплачен.</li>
+        </ol>
+        <div class="pay__actions">
+          <a class="btn btn--primary btn--lg btn--block" href="<%= invoiceLink %>" target="_blank" rel="noopener noreferrer" data-testid="telegram-invoice-link">Открыть счёт в Telegram</a>
+          <a class="btn btn--ghost btn--block" href="<%= returnUrl %>" data-testid="pay-back">Вернуться к заказу</a>
+        </div>
+        <div class="pay__wait" data-pay-wait data-state="waiting" role="status" aria-live="polite">
+          <span class="pay__spinner" aria-hidden="true"></span>
+          <span data-pay-wait-text>Ждём подтверждение оплаты…</span>
+        </div>
+      </div>
+    </div>
+    <p class="pay__note">Нет Telegram или счёт не открывается? <% if (settings.phone) { %>Позвоните нам: <a href="tel:<%= String(settings.phone).replace(/[^+\d]/g, '') %>"><%= settings.phone %></a> — <% } %>поможем оплатить заказ другим способом.</p>
+<%- include('partials/poll') %>
+<%- include('partials/foot') %>

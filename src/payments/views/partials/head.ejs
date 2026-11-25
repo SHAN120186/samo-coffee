@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="same-origin">
+  <title><%= title %> — <%= settings.site_name %></title>
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/tokens.css">
+<% if (locals.refresh) { -%>
+  <noscript><meta http-equiv="refresh" content="<%= refresh.seconds %>;url=<%= refresh.url %>"></noscript>
+<% } -%>
+  <style>
+    body { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: var(--space-6) var(--space-4);
+      background:
+        radial-gradient(52rem 26rem at 88% -8%, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 62%),
+        radial-gradient(40rem 22rem at -10% 108%, color-mix(in srgb, var(--honey-500) 14%, transparent), transparent 60%),
+        var(--color-bg); }
+    .pay { width: 100%; max-width: 27.5rem; animation: pay-in var(--duration) var(--ease-out) both; }
+    @keyframes pay-in { from { opacity: 0; transform: translateY(10px); } }
+    .pay__brand { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-5); }
+    .pay__brand img { height: 2rem; width: auto; }
+    .pay__card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); overflow: hidden; }
+    .pay__head { position: relative; padding: var(--space-5) var(--space-5) var(--space-4); }
+    .pay__label { margin: 0; font-size: var(--text-xs); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--color-text-muted); }
+    .pay__total { margin: var(--space-1) 0 0; font-family: var(--font-display); font-weight: 600; font-size: var(--text-3xl); line-height: 1.1; letter-spacing: -0.01em; font-variant-numeric: lining-nums; }
+    .pay__meta { margin: var(--space-2) 0 0; font-size: var(--text-sm); color: var(--color-text-muted); }
+    /* receipt perforation between the total and the lines */
+    .pay__tear { position: relative; height: 0; border-top: 1px dashed var(--color-border-strong); margin: 0 var(--space-5); }
+    .pay__tear::before, .pay__tear::after { content: ''; position: absolute; top: -0.6rem; width: 1.2rem; height: 1.2rem; border-radius: 50%; background: var(--color-bg); border: 1px solid var(--color-border); }
+    .pay__tear::before { left: calc(-1 * var(--space-5) - 0.6rem); }
+    .pay__tear::after { right: calc(-1 * var(--space-5) - 0.6rem); }
+    .pay__items { list-style: none; margin: 0; padding: var(--space-4) var(--space-5); display: grid; gap: var(--space-2); font-size: var(--text-sm); }
+    .pay__items li { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-4); }
+    .pay__items span:first-child { min-width: 0; overflow-wrap: anywhere; }
+    .pay__items span:last-child { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--color-text-soft); }
+    .pay__items .is-muted span { color: var(--color-text-muted); }
+    .pay__body { padding: var(--space-5); border-top: 1px solid var(--color-border); display: grid; gap: var(--space-4); }
+    .pay__actions { display: grid; gap: var(--space-2); }
+    .pay__alt { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+    .pay__alt .btn { padding-inline: var(--space-3); white-space: normal; text-align: center; }
+    .pay__decline:hover { --btn-border: var(--color-danger); --btn-fg: var(--color-danger); --btn-bg: var(--color-danger-soft); }
+    .pay__note { margin: var(--space-4) auto 0; max-width: 24rem; text-align: center; font-size: var(--text-xs); line-height: 1.55; color: var(--color-text-muted); }
+    .pay__note a { white-space: nowrap; }
+    .pay__lead { margin: 0; font-size: var(--text-sm); color: var(--color-text-soft); }
+    .pay__wait { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); background: var(--color-bg); font-size: var(--text-sm); color: var(--color-text-soft); }
+    .pay__wait[data-state='paid'] { background: var(--color-success-soft); color: var(--color-success); font-weight: 600; }
+    .pay__wait[data-state='stalled'], .pay__wait[data-state='closed'] { background: var(--color-warning-soft); color: var(--color-warning); }
+    .pay__spinner { flex: none; width: 1.15rem; height: 1.15rem; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--color-accent) 25%, transparent); border-top-color: var(--color-accent); animation: pay-spin 0.9s linear infinite; }
+    .pay__wait:not([data-state='waiting']) .pay__spinner { display: none; }
+    @keyframes pay-spin { to { transform: rotate(360deg); } }
+    .pay__steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: var(--space-3); font-size: var(--text-sm); color: var(--color-text-soft); }
+    .pay__steps li { counter-increment: step; display: grid; grid-template-columns: 1.6rem 1fr; gap: var(--space-3); align-items: start; }
+    .pay__steps li::before { content: counter(step); display: grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--color-accent-soft); color: var(--terracotta-700); font-size: var(--text-xs); font-weight: 700; }
+
+    /* demo bank card */
+    .bankcard { position: relative; aspect-ratio: 1.586; border-radius: 16px; padding: var(--space-4) var(--space-5); color: var(--cream-100); overflow: hidden; isolation: isolate;
+      display: grid; grid-template-rows: auto 1fr auto; box-shadow: 0 18px 30px -18px rgb(42 26 18 / 0.7);
+      background: linear-gradient(135deg, var(--espresso-800) 0%, var(--espresso-950) 62%); }
+    .bankcard::before { content: ''; position: absolute; z-index: -1; right: -22%; top: -55%; width: 78%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 35% 65%, var(--terracotta-500), var(--terracotta-700) 70%); opacity: .92; }
+    .bankcard::after { content: ''; position: absolute; z-index: -1; right: 12%; bottom: -70%; width: 62%; aspect-ratio: 1; border-radius: 50%; border: 1px solid rgb(255 250 241 / 0.14); }
+    .bankcard__top { display: flex; justify-content: space-between; align-items: flex-start; font-size: var(--text-xs); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+    .bankcard__top span:last-child { color: rgb(255 250 241 / 0.92); }
+    .bankcard__chip { align-self: center; width: 2.6rem; height: 1.9rem; border-radius: 6px; background: linear-gradient(135deg, #f1cf7a, var(--honey-500) 55%, #b98a26); position: relative; }
+    .bankcard__chip::before { content: ''; position: absolute; inset: 22% 0; border-block: 1px solid rgb(42 26 18 / 0.3); }
+    .bankcard__chip::after { content: ''; position: absolute; inset: 0 34%; border-inline: 1px solid rgb(42 26 18 / 0.3); }
+    .bankcard__number { margin: 0 0 var(--space-2); font-family: var(--font-mono); font-size: clamp(1rem, 4.6vw, 1.3rem); letter-spacing: .08em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .bankcard__row { display: flex; justify-content: space-between; gap: var(--space-4); font-size: var(--text-xs); }
+    .bankcard__row dt { margin: 0; font-size: 0.625rem; letter-spacing: .12em; text-transform: uppercase; color: rgb(255 250 241 / 0.62); }
+    .bankcard__row dd { margin: 0; font-family: var(--font-mono); font-size: var(--text-sm); letter-spacing: .06em; }
+    .bankcard__row div:last-child { text-align: right; }
+    dl.bankcard__row { margin: 0; }
+    @media (max-width: 26rem) { .pay__alt { grid-template-columns: 1fr; } .pay__head, .pay__items, .pay__body { padding-inline: var(--space-4); } .pay__tear { margin-inline: var(--space-4); } .pay__tear::before { left: calc(-1 * var(--space-4) - 0.6rem); } .pay__tear::after { right: calc(-1 * var(--space-4) - 0.6rem); } .bankcard { padding-inline: var(--space-4); } }
+  </style>
+</head>
+<body>
+  <main class="pay">
+    <div class="pay__brand">
+      <a href="/" aria-label="<%= settings.site_name %> — на главную"><img src="/img/logo.svg" alt="<%= settings.site_name %>"></a>
+      <span class="badge badge--<%= locals.badgeTone || 'dark' %>"><%= locals.badge || 'Оплата заказа' %></span>
+    </div>

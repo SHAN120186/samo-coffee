@@ -21,7 +21,7 @@ import * as auth from './services/auth.js';
 import siteRouter from './site/routes.js';
 import adminRouter from './admin/routes.js';
 import tmaApiRouter from './tma/api.js';
-import paymentsRouter from './payments/routes.js';
+import paymentsRouter, { paymentsErrorHandler } from './payments/routes.js';
 import { startBot } from './bot/index.js';
 
 /** Paths that are NOT protected by the CSRF middleware (token/signature-authenticated endpoints). */
@@ -198,6 +198,10 @@ export async function createApp({ bot = true } = {}) {
     if (wantsJson(req)) return res.status(404).json({ ok: false, error: 'not_found', message: 'Не найдено' });
     return errorPage(res, 404, 'Страница не найдена', 'Возможно, ссылка устарела.');
   });
+
+  // Payment providers must be answered in their own protocol even when the request was rejected
+  // before reaching the router (malformed body); everything else falls through to the handler below.
+  app.use('/pay', paymentsErrorHandler);
 
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {

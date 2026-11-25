@@ -1,0 +1,17 @@
+      <div class="pay__head">
+        <p class="pay__label">Заказ <span data-testid="pay-order-number"><%= order.number %></span></p>
+        <p class="pay__total" data-testid="pay-total"><%= formatSum(order.total) %></p>
+        <p class="pay__meta"><%= settings.site_name %> · <%= order.kind === 'subscription' ? 'подписка на кофе' : `${order.items.length} ${plural(order.items.length, ['позиция', 'позиции', 'позиций'])}` %></p>
+      </div>
+      <div class="pay__tear" aria-hidden="true"></div>
+      <ul class="pay__items">
+<% order.items.forEach((item) => { -%>
+        <li><span><%= item.title %><% if (item.qty > 1) { %> × <%= item.qty %><% } %></span><span><%= formatSum(item.total) %></span></li>
+<% }) -%>
+<% if (order.delivery_fee) { -%>
+        <li class="is-muted"><span>Доставка</span><span><%= formatSum(order.delivery_fee) %></span></li>
+<% } -%>
+<% if (order.discount) { -%>
+        <li class="is-muted"><span>Скидка</span><span>−<%= formatSum(order.discount) %></span></li>
+<% } -%>
+      </ul>

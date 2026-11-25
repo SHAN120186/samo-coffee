@@ -84,6 +84,10 @@ ADMIN_PASSWORD=<пароль первого администратора>
 Любой успешный платёж проходит через одну функцию `orders.markPaid()`: она идемпотентна, списывает
 остатки, активирует или продлевает подписку, пишет событие в аналитику и отправляет уведомления.
 
+Подробно — настройка кабинетов Payme, Click и Telegram, адреса для регистрации, коды ошибок, проверка,
+модель продления подписок и добавление нового провайдера: [docs/PAYMENTS.md](docs/PAYMENTS.md).
+В production демо-оплата выключена; для демонстрационного стенда её включает `ALLOW_MOCK_PAYMENTS=1`.
+
 ## Docker
 
 ```bash
@@ -96,6 +100,10 @@ docker compose exec app node --disable-warning=ExperimentalWarning src/db/seed.j
 reverse proxy с HTTPS (Caddy, nginx, Traefik) — приложение учитывает `X-Forwarded-*` (`TRUST_PROXY`).
 
 Резервная копия — это один файл: `data/samo.db` (плюс папка `public/uploads`).
+
+Контейнер работает в production-режиме, поэтому демо-оплата в нём выключена: настройте платёжную
+систему (см. [docs/PAYMENTS.md](docs/PAYMENTS.md)) или, для демонстрационного стенда, добавьте в `.env`
+строку `ALLOW_MOCK_PAYMENTS=1`.
 
 ## Устройство проекта
 

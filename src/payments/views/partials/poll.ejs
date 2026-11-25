@@ -1,0 +1,45 @@
+<%# Waits for the order to be paid: polls /pay/status/<token> (state from the DB) and moves on. %>
+<script type="application/json" id="pay-poll"><%- jsonForScript({
+  statusUrl: `/pay/status/${order.public_token}`,
+  returnUrl,
+  intervalMs: locals.intervalMs || 2500,
+  stallAfterMs: locals.stallAfterMs || 0,
+  texts: Object.assign({ paid: 'Оплата получена — открываем заказ…', closed: 'Заказ закрыт. Открываем страницу заказа…', stalled: 'Подтверждение ещё не пришло. Обычно это занимает до минуты.' }, locals.texts || {}),
+}) %></script>
+<script nonce="<%= cspNonce %>">
+(() => {
+  const cfg = JSON.parse(document.getElementById('pay-poll').textContent);
+  const box = document.querySelector('[data-pay-wait]');
+  const label = box && box.querySelector('[data-pay-wait-text]');
+  const started = Date.now();
+  let timer = null;
+  const show = (state, text) => {
+    if (!box) return;
+    box.dataset.state = state;
+    if (label && text) label.textContent = text;
+  };
+  const leave = (state, text) => {
+    show(state, text);
+    document.querySelectorAll('[data-pay-while-waiting]').forEach((el) => { el.hidden = true; });
+    clearTimeout(timer);
+    setTimeout(() => { window.location.replace(cfg.returnUrl); }, 900);
+  };
+  async function tick() {
+    try {
+      const res = await fetch(cfg.statusUrl, { headers: { accept: 'application/json' }, cache: 'no-store', credentials: 'same-origin' });
+      if (res.ok) {
+        const s = await res.json();
+        if (s.paid) return leave('paid', cfg.texts.paid);
+        if (!s.can_pay) return leave('closed', cfg.texts.closed);
+      }
+    } catch (e) { /* offline for a moment — try again */ }
+    if (cfg.stallAfterMs && Date.now() - started > cfg.stallAfterMs) {
+      show('stalled', cfg.texts.stalled);
+      document.querySelectorAll('[data-pay-stalled]').forEach((el) => { el.hidden = false; });
+    }
+    timer = setTimeout(tick, document.hidden ? cfg.intervalMs * 3 : cfg.intervalMs);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { clearTimeout(timer); tick(); } });
+  timer = setTimeout(tick, 1200);
+})();
+</script>

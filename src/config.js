@@ -83,7 +83,13 @@ export const config = {
     /** Default provider; can be overridden at runtime by the `payment_provider` setting. */
     provider: oneOf('PAYMENT_PROVIDER', ['mock', 'telegram', 'payme', 'click'], 'mock'),
     currency: 'UZS',
-    telegram: { providerToken: str('TELEGRAM_PAYMENT_TOKEN', '') },
+    /** The built-in demo checkout works outside production only, unless explicitly allowed (demo stands). */
+    allowMock: !isProd || bool('ALLOW_MOCK_PAYMENTS', false),
+    telegram: {
+      providerToken: str('TELEGRAM_PAYMENT_TOKEN', ''),
+      /** Ask the payer for a phone number in the Telegram invoice form. */
+      needPhone: bool('TELEGRAM_PAYMENT_NEED_PHONE', false),
+    },
     payme: {
       merchantId: str('PAYME_MERCHANT_ID', ''),
       key: str('PAYME_KEY', ''),

@@ -1,0 +1,18 @@
+<%- include('partials/head', { badge: 'Проверка оплаты', badgeTone: 'accent', refresh: { seconds: 8, url: returnUrl } }) %>
+    <div class="pay__card">
+<%- include('partials/summary') %>
+      <div class="pay__body">
+        <div class="pay__wait" data-pay-wait data-state="waiting" role="status" aria-live="polite">
+          <span class="pay__spinner" aria-hidden="true"></span>
+          <span data-pay-wait-text>Ждём подтверждение от платёжной системы…</span>
+        </div>
+        <p class="pay__lead" data-pay-while-waiting>Оплата обрабатывается. Страница обновится сама, как только банк подтвердит платёж, — закрывать её не обязательно: статус придёт и в заказ.</p>
+        <div class="pay__actions">
+          <a class="btn btn--dark btn--block" href="<%= returnUrl %>" data-testid="pay-back">Перейти к заказу</a>
+          <a class="btn btn--ghost btn--block" href="/pay/return/<%= order.public_token %>" data-pay-stalled hidden>Проверить ещё раз</a>
+        </div>
+      </div>
+    </div>
+    <p class="pay__note">Если деньги списались, а заказ не стал оплаченным в течение 15 минут, напишите нам<% if (settings.phone) { %> или позвоните: <a href="tel:<%= String(settings.phone).replace(/[^+\d]/g, '') %>"><%= settings.phone %></a><% } %> — проверим платёж вручную.</p>
+<%- include('partials/poll', { stallAfterMs: 45000 }) %>
+<%- include('partials/foot') %>

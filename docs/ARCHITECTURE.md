@@ -579,6 +579,27 @@ Conventions for the real providers:
 
 Webhook paths under `/pay/payme`, `/pay/click`, `/pay/telegram` are CSRF-exempt; `req.rawBody` is available.
 
+**All four providers are implemented** (`src/payments/providers/{mock,telegram,payme,click}.js`). Cabinet
+setup, URLs to register, error-code tables, the return/waiting pages and "how to add a provider" are in
+**`docs/PAYMENTS.md`**. Additions to the contract above:
+
+- More registry exports: `buildInvoiceParams(order, { needPhone? })` (Bot API fields for `sendInvoice` /
+  `createInvoiceLink`), `providerReturnUrl(order)`.
+- `startPayment()` re-reads the order from the DB, also throws `amount_invalid` (total must be a positive
+  integer) and passes provider errors through (e.g. `TelegramError` — the Mini App falls back to the hosted page).
+- Every attempt is a `payments` row: `created` when the customer is sent to Payme/Click (no `provider_tx_id`
+  yet), adopted by `CreateTransaction` / `Prepare`; when an order gets paid all other open attempts are closed
+  (bus `order.paid`).
+- Extra routes: `GET /pay/return/:token` (the return URL given to Payme/Click — ignores the query string,
+  reads the DB, shows a waiting page while a callback is in flight), `GET /pay/status/:token` (JSON for the
+  waiting pages), `GET /pay/invoice/:token` ("pay in Telegram" page used when the site pays with the
+  `telegram` provider; `/pay/order/:token` redirects there).
+- The mock provider is OFF in production (`isConfigured()` false, `/pay/mock/*` → 404) unless
+  `ALLOW_MOCK_PAYMENTS=1`.
+- `app.use('/pay', paymentsErrorHandler)` (before the generic error handler) answers Payme/Click in their
+  own protocol when the global body parsers reject a request.
+- Payment log: `paymentLog(event, fields)` in `src/payments/log.js` — JSON lines, secrets masked.
+
 ---
 
 ## 8. Security helpers
@@ -710,7 +731,9 @@ uploads { dir, maxBytes }, analytics { enabled }`.
 | `BOT_MODE`, `WEBHOOK_SECRET` | `polling`, empty | |
 | `TMA_DEV_AUTH`, `TMA_INITDATA_MAX_AGE`, `TMA_URL` | `0`, `86400`, `BASE_URL/tma/` | |
 | `PAYMENT_PROVIDER` | `mock` | `mock|telegram|payme|click` |
+| `ALLOW_MOCK_PAYMENTS` | `0` | production only: `1` enables the demo checkout (`config.payments.allowMock`) |
 | `TELEGRAM_PAYMENT_TOKEN` | empty | |
+| `TELEGRAM_PAYMENT_NEED_PHONE` | `0` | `1` → `need_phone_number` in invoices (`config.payments.telegram.needPhone`) |
 | `PAYME_MERCHANT_ID`, `PAYME_KEY`, `PAYME_TEST`, `PAYME_ACCOUNT_FIELD` | empty, empty, `1`, `order_id` | |
 | `CLICK_SERVICE_ID`, `CLICK_MERCHANT_ID`, `CLICK_SECRET_KEY`, `CLICK_MERCHANT_USER_ID` | empty | |
 

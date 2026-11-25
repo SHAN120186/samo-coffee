@@ -9,7 +9,7 @@ import { FEEDBACK_CHANNEL_LABELS } from '../services/feedback.js';
 import { fitCaption } from './photos.js';
 
 const e = escapeTg;
-const lines = (...parts) => parts.flat().filter((l) => l !== null && l !== undefined && l !== false).join('\n');
+const lines = (...parts) => parts.flat(Infinity).filter((l) => l !== null && l !== undefined && l !== false).join('\n');
 const lower = (s) => String(s || '').toLocaleLowerCase('ru');
 
 export const STATUS_ICON = {
@@ -101,14 +101,19 @@ export function productCard(product) {
 
 // ─────────────────────────────── plans & subscription
 
-export function plansText(plans, { intro = true } = {}) {
+/** "• План — цена за период" lines (or a note that there are no plans). */
+export function plansList(plans) {
+  return plans.length
+    ? plans.map((p) => `• <b>${e(p.title)}</b> — ${formatSum(p.price)} за ${periodLabel(p.period_days)}${p.badge ? ` · <i>${e(lower(p.badge))}</i>` : ''}`).join('\n')
+    : 'Сейчас нет доступных планов — напишите нам, подберём вариант.';
+}
+
+export function plansText(plans) {
   return lines(
     '🔁 <b>Подписка на кофе</b>',
-    intro ? 'Свежая обжарка приезжает сама — выбираете план, мы подбираем лоты и привозим по расписанию. Доставка бесплатная.' : null,
+    'Свежая обжарка приезжает сама — выбираете план, мы подбираем лоты и привозим по расписанию. Доставка бесплатная.',
     '',
-    plans.length
-      ? plans.map((p) => `• <b>${e(p.title)}</b> — ${formatSum(p.price)} за ${periodLabel(p.period_days)}${p.badge ? `  <i>${e(lower(p.badge))}</i>` : ''}`)
-      : 'Сейчас нет доступных планов — напишите нам, подберём вариант.',
+    plansList(plans),
   );
 }
 
@@ -137,10 +142,12 @@ export function subscriptionCard(sub) {
   );
 }
 
-export const noSubscription = () => lines(
+export const noSubscription = (plans) => lines(
   '🔁 <b>У вас пока нет подписки</b>',
   '',
-  'С подпиской свежий кофе приезжает сам: мы подбираем лоты под ваш вкус, обжариваем и привозим по расписанию.',
+  'С подпиской свежий кофе приезжает сам: мы подбираем лоты под ваш вкус, обжариваем и привозим по расписанию. Доставка бесплатная.',
+  '',
+  plansList(plans),
 );
 
 // ─────────────────────────────── orders

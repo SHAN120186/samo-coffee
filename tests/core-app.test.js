@@ -17,7 +17,7 @@ after(async () => {
   await t.close();
 });
 
-test('app boots: stubs, health, static assets and security headers', async () => {
+test('app boots: health, static assets and security headers', async () => {
   const home = await t.client.get('/');
   assert.equal(home.status, 200);
   assert.match(home.headers.get('content-type'), /text\/html/);
@@ -29,7 +29,11 @@ test('app boots: stubs, health, static assets and security headers', async () =>
   assert.equal(home.headers.get('x-content-type-options'), 'nosniff');
 
   assert.deepEqual((await t.client.get('/healthz')).json().ok, true);
-  assert.equal((await t.client.get('/admin')).status, 200);
+  // the admin panel is behind a login: anonymous visitors are redirected, the login page renders
+  const adminRoot = await t.client.get('/admin');
+  assert.equal(adminRoot.status, 302);
+  assert.match(adminRoot.headers.get('location'), /^\/admin\/login/);
+  assert.equal((await t.client.get('/admin/login')).status, 200);
   assert.equal((await t.client.get('/api/tma/ping')).json().ok, true);
   for (const asset of ['/css/tokens.css', '/img/logo.svg', '/img/products/kenya-nyeri.svg', '/vendor/chart.js/chart.umd.min.js', '/vendor/quill/quill.js',
     '/fonts/playfair-display/playfair-display-cyrillic-600-normal.woff2', '/fonts/manrope/manrope-cyrillic-400-normal.woff2']) {
