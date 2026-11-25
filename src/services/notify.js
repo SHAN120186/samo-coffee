@@ -116,6 +116,15 @@ export function orderPaid(order) {
   ]);
 }
 
+/** A paid order needed more units than the stock had (oversold) → admins. items: [{ title, qty, taken }] */
+export function orderOversold(order, items) {
+  return notifyAdmins([
+    `⚠️ <b>Заказ ${escapeTg(order.number)} оплачен, но товара не хватило на складе</b>`,
+    ...items.map((i) => `• ${escapeTg(i.title)}: в заказе ${i.qty}, на складе было ${i.taken}`),
+    'Свяжитесь с покупателем: замена, ожидание новой партии или возврат.',
+  ].join('\n'), linkButton('Открыть в админке', adminOrderUrl(order)));
+}
+
 const CUSTOMER_STATUS_TEXT = {
   processing: (o) => `☕ Заказ <b>${escapeTg(o.number)}</b> собирается: обжарщик уже пакует ваш кофе.`,
   shipped: (o) => `🚚 Заказ <b>${escapeTg(o.number)}</b> передан курьеру. Скоро будет у вас!`,

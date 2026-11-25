@@ -23,7 +23,7 @@ const DAYS = 60;
 
 const WIPE = [
   'events', 'page_views', 'broadcasts', 'feedback_messages', 'feedback_threads', 'payments', 'order_events', 'order_items',
-  'subscriptions', 'orders', 'cart_items', 'carts', 'customers', 'tg_users', 'media', 'faq', 'posts', 'plans', 'products',
+  'subscription_periods', 'subscriptions', 'orders', 'cart_items', 'carts', 'customers', 'tg_users', 'media', 'faq', 'posts', 'plans', 'products',
   'categories', 'content_blocks', 'settings',
 ];
 
@@ -417,6 +417,7 @@ export function seed({ quiet = false, wipe = true } = {}) {
 
     // subscriptions
     const insSub = db.prepare(`INSERT INTO subscriptions (customer_id, plan_id, status, started_at, current_period_end, last_order_id, renewals, cancelled_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    const insPeriod = db.prepare('INSERT INTO subscription_periods (subscription_id, order_id, days, created_at) VALUES (?, ?, ?, ?)');
     const seenCustomers = new Set();
     for (const first of subscribers.sort((a, b) => a.at - b.at)) {
       if (first.status === 'refunded' || seenCustomers.has(first.customer.id)) continue;
@@ -426,7 +427,9 @@ export function seed({ quiet = false, wipe = true } = {}) {
       const end = first.at + first.plan.period_days * DAY * (renewals + 1);
       const status = end < nowMs ? weighted([['expired', 65], ['cancelled', 35]]) : weighted([['active', 88], ['paused', 7], ['cancelled', 5]]);
       const cancelledAt = status === 'cancelled' ? iso(Math.min(nowMs, last.at + int(3, 20) * DAY)) : null;
-      insSub.run(first.customer.id, first.plan.id, status, iso(first.at), iso(end), last.id, renewals, cancelledAt, iso(first.at), iso(Math.min(nowMs, last.at + 600000)));
+      const subId = Number(insSub.run(first.customer.id, first.plan.id, status, iso(first.at), iso(end), last.id, renewals, cancelledAt, iso(first.at), iso(Math.min(nowMs, last.at + 600000))).lastInsertRowid);
+      // which order paid for which period (a refund in the panel reverts exactly that period)
+      for (const o of first.renewed ? [first, first.renewed] : [first]) insPeriod.run(subId, o.id, first.plan.period_days, iso(o.at));
     }
 
     const insEv = db.prepare('INSERT INTO events (name, channel, session_id, tg_user_id, product_id, order_id, value, meta, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');

@@ -23,6 +23,7 @@
 //     performed transaction → orders.refund() (refused with -31007 once the order has been shipped).
 // Amounts: Payme speaks tiyin, the database whole sums.
 import { config } from '../../config.js';
+import { tx } from '../../db/index.js';
 import { AppError } from '../../lib/errors.js';
 import { sumToTiyin, tiyinToSum } from '../../lib/money.js';
 import * as orders from '../../services/orders.js';
@@ -49,6 +50,7 @@ export const ERROR = Object.freeze({
   ORDER_NOT_FOUND: -31050,
   ORDER_PAID: -31051,
   ORDER_CLOSED: -31052,
+  OUT_OF_STOCK: -31053,
   ORDER_BUSY: -31099,
 });
 
@@ -71,6 +73,7 @@ const MESSAGES = {
   order_not_found: [ERROR.ORDER_NOT_FOUND, 'Заказ не найден', 'Buyurtma topilmadi', 'Order not found'],
   order_paid: [ERROR.ORDER_PAID, 'Заказ уже оплачен', 'Buyurtma allaqachon to‘langan', 'The order is already paid'],
   order_closed: [ERROR.ORDER_CLOSED, 'Заказ отменён и не может быть оплачен', 'Buyurtma bekor qilingan, uni to‘lab bo‘lmaydi', 'The order is cancelled and cannot be paid'],
+  out_of_stock: [ERROR.OUT_OF_STOCK, 'Товар из заказа закончился, оплата невозможна', 'Buyurtmadagi mahsulot tugadi, to‘lab bo‘lmaydi', 'An item of the order is out of stock, the order cannot be paid'],
   order_busy: [ERROR.ORDER_BUSY, 'По заказу уже есть платёж, ожидающий подтверждения', 'Buyurtma bo‘yicha tasdiqlanishi kutilayotgan to‘lov mavjud', 'Another payment for this order is awaiting confirmation'],
 };
 
@@ -199,6 +202,8 @@ function assertPayable(order, amount) {
   if (order.is_paid) throw fail('order_paid', field);
   if (!order.can_pay || !isChargeable(order)) throw fail('order_closed', field);
   if (!Number.isSafeInteger(amount) || amount !== sumToTiyin(order.total)) throw fail('wrong_amount', 'amount');
+  // stock is not reserved by unpaid orders: refuse before Payme charges for goods that ran out
+  if (orders.stockShortage(order).length) throw fail('out_of_stock', field);
   const active = findActiveTx(order.id);
   if (active) {
     if (!isExpired(active)) throw fail('order_busy', field);
@@ -276,27 +281,41 @@ function performTransaction(params) {
     cancelTx(p, REASON.EXECUTION_ERROR);
     throw fail('cannot_perform');
   }
+  if (orders.stockShortage(order).length) {
+    // the goods ran out after CreateTransaction: refuse, Payme returns the money to the customer
+    cancelTx(p, REASON.EXECUTION_ERROR);
+    releaseOrder(p.order_id, 'Товар закончился — оплата отменена, деньги вернутся');
+    throw fail('cannot_perform');
+  }
   try {
-    const result = orders.markPaid(order.id, { provider: 'payme', paymentId: p.id, txId: p.provider_tx_id, amount: p.amount });
-    if (!result.changed) throw new AppError('already_paid', 'Заказ уже оплачен', 409);
+    // markPaid and "state 2" are committed together: a stop between the two can no longer leave a
+    // transaction that paid the order but still looks cancellable as "not performed".
+    return tx(() => {
+      const result = orders.markPaid(order.id, { provider: 'payme', paymentId: p.id, txId: p.provider_tx_id, amount: p.amount });
+      if (!result.changed) throw new AppError('already_paid', 'Заказ уже оплачен', 409);
+      return performResult(paymentsRepo.updatePayment(p.id, { state: STATE.PERFORMED }));
+    });
   } catch (err) {
     if (!(err instanceof AppError)) throw err;
     cancelTx(p, REASON.EXECUTION_ERROR);
     throw fail('cannot_perform');
   }
-  return performResult(paymentsRepo.updatePayment(p.id, { state: STATE.PERFORMED }));
 }
 
 function cancelTransaction(params) {
   const p = requireTx(params);
   const reason = requireInt(params, 'reason');
 
-  if (p.state === STATE.CREATED) {
+  // A transaction that already paid the order counts as performed even if its state was not saved
+  // (rows written before markPaid and the state were committed together): cancelling it is a REFUND,
+  // otherwise Payme would return the money while the order stays paid and fulfilled.
+  const performed = p.state === STATE.PERFORMED || (p.state === STATE.CREATED && p.status === 'paid');
+  if (p.state === STATE.CREATED && !performed) {
     const cancelled = cancelTx(p, reason, STATE.CANCELLED);
     releaseOrder(p.order_id, `Payme отменил платёж (причина ${reason})`);
     return cancelResult(cancelled);
   }
-  if (p.state === STATE.PERFORMED) {
+  if (performed) {
     const order = orders.getOrder(p.order_id);
     if (!order) throw fail('cannot_cancel');
     if (order.status !== 'refunded') {

@@ -152,6 +152,38 @@ export function listForTgUser(tgUserId, limit = 20) {
     .map((row) => withItems(hydrate(row)));
 }
 
+/**
+ * Lines of a product order that the warehouse cannot cover right now: [{ product_id, title, qty, stock }].
+ * Stock is not reserved by unpaid orders, so every payment path asks this right before it lets the
+ * customer be charged (payments.startPayment, Telegram pre_checkout, Payme CheckPerform/Create/Perform,
+ * Click Prepare/Complete, the demo checkout). Subscription orders never have a shortage.
+ * @param {object} order order with items[] (getOrder / getOrderByToken)
+ */
+export function stockShortage(order) {
+  if (!order || order.kind !== 'product') return [];
+  const need = new Map();
+  for (const item of order.items || []) {
+    if (!item.product_id) continue;
+    const line = need.get(item.product_id) || { product_id: item.product_id, title: item.title, qty: 0 };
+    line.qty += item.qty;
+    need.set(item.product_id, line);
+  }
+  const short = [];
+  for (const line of need.values()) {
+    const product = get('SELECT stock FROM products WHERE id = ?', line.product_id);
+    const stock = product ? product.stock : 0;
+    if (stock < line.qty) short.push({ ...line, stock });
+  }
+  return short;
+}
+
+/** Customer-facing sentence for a shortage (or '' when there is none). */
+export function stockShortageMessage(order) {
+  const short = stockShortage(order);
+  if (!short.length) return '';
+  return `«${short[0].title}» только что закончился. Напишите нам — подберём замену или сообщим о новой обжарке.`;
+}
+
 /** { new: n, pending_payment: n, ... , all: n } */
 export function countByStatus() {
   const out = Object.fromEntries(ORDER_STATUSES.map((s) => [s, 0]));
@@ -324,7 +356,9 @@ export function markPendingPayment(orderId, provider) {
  * admin "mark as paid" action must call it. Idempotent: the second call for a paid order changes nothing.
  *
  * Side effects (all in one DB transaction): order → paid, payment row → paid (created or updated),
- * stock decrement for product orders, subscription activation/extension for subscription orders,
+ * stock decrement for product orders (never below zero: the units really taken are stored in
+ * order_items.stock_taken and a shortfall is reported to the admins — payment paths check
+ * stockShortage() BEFORE charging), subscription activation/extension for subscription orders,
  * `purchase` analytics event, history entry. After commit: Telegram notifications to admins and the
  * customer + bus events 'order.paid' (and 'subscription.activated').
  *
@@ -341,6 +375,7 @@ export function markPendingPayment(orderId, provider) {
  */
 export function markPaid(orderId, { provider = 'manual', txId = null, paymentId = null, amount = null, raw = null, actor = null } = {}) {
   let subscriptionResult = null;
+  const oversold = [];
   const result = tx(() => {
     const row = get('SELECT * FROM orders WHERE id = ?', Number(orderId));
     if (!row) throw notFound('Заказ');
@@ -375,8 +410,19 @@ export function markPaid(orderId, { provider = 'manual', txId = null, paymentId 
     }
 
     if (row.kind === 'product') {
-      for (const item of all('SELECT product_id, qty FROM order_items WHERE order_id = ? AND product_id IS NOT NULL', row.id)) {
-        run('UPDATE products SET stock = MAX(0, stock - ?), updated_at = ? WHERE id = ?', item.qty, ts, item.product_id);
+      // Stock never goes below zero. What was really taken is stored per line, so a refund gives
+      // back exactly that; a shortfall (the order was oversold) is recorded and reported to the staff.
+      for (const item of all('SELECT id, product_id, title, qty FROM order_items WHERE order_id = ? AND product_id IS NOT NULL', row.id)) {
+        const product = get('SELECT stock FROM products WHERE id = ?', item.product_id);
+        const taken = Math.max(0, Math.min(item.qty, product ? product.stock : 0));
+        if (taken > 0) run('UPDATE products SET stock = stock - ?, updated_at = ? WHERE id = ?', taken, ts, item.product_id);
+        run('UPDATE order_items SET stock_taken = ? WHERE id = ?', taken, item.id);
+        if (taken < item.qty) oversold.push({ title: item.title, qty: item.qty, taken });
+      }
+      if (oversold.length) {
+        logEvent(row.id, 'note', {
+          note: `Не хватило на складе: ${oversold.map((i) => `${i.title} — нужно ${i.qty}, было ${i.taken}`).join('; ')}`,
+        });
       }
     } else if (row.kind === 'subscription') {
       subscriptionResult = subscriptions.activateFromOrder(row);
@@ -394,6 +440,7 @@ export function markPaid(orderId, { provider = 'manual', txId = null, paymentId 
   const payment = result.paymentId ? paymentsRepo.getPayment(result.paymentId) : null;
   if (result.changed) {
     notify.orderPaid(order);
+    if (oversold.length) notify.orderOversold(order, oversold);
     emit('order.paid', { order, payment });
     if (subscriptionResult) {
       notify.subscriptionActivated(subscriptionResult.subscription, order, subscriptionResult.renewed);
@@ -456,8 +503,9 @@ export function cancel(orderId, { actor = 'system', reason = '' } = {}) {
 }
 
 /**
- * Refund a PAID order: status → refunded, payment → refunded, stock is returned, the subscription
- * period granted by this order is reverted. Idempotent. Moving the money back is the provider's job
+ * Refund a PAID order: status → refunded, payment → refunded, the stock taken by the payment is
+ * returned, the subscription period granted by THIS order is reverted (any order of the
+ * subscription, not only the latest). Idempotent. Moving the money back is the provider's job
  * (Payme CancelTransaction calls this; for other providers refund in the provider cabinet).
  * @param {number} orderId @param {{ actor?: string, reason?: string }} [o]
  * @returns {{ order: object, changed: boolean }}
@@ -472,8 +520,10 @@ export function refund(orderId, { actor = 'system', reason = '' } = {}) {
     run(`UPDATE orders SET status = 'refunded', payment_status = 'refunded', cancelled_at = ?, updated_at = ? WHERE id = ?`, ts, ts, row.id);
     run(`UPDATE payments SET status = 'refunded', updated_at = ? WHERE order_id = ? AND status = 'paid'`, ts, row.id);
     if (row.kind === 'product') {
-      for (const item of all('SELECT product_id, qty FROM order_items WHERE order_id = ? AND product_id IS NOT NULL', row.id)) {
-        run('UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?', item.qty, ts, item.product_id);
+      // give back what the payment really took (see markPaid); rows paid before stock_taken existed took qty
+      for (const item of all('SELECT product_id, qty, stock_taken FROM order_items WHERE order_id = ? AND product_id IS NOT NULL', row.id)) {
+        const back = item.stock_taken ?? item.qty;
+        if (back > 0) run('UPDATE products SET stock = stock + ?, updated_at = ? WHERE id = ?', back, ts, item.product_id);
       }
     } else {
       subscriptions.revertFromOrder(row);

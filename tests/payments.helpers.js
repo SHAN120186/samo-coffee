@@ -20,6 +20,13 @@ export function makeOrder({ qty = 2, price = 120000, stock = 10, channel = 'site
   return { order, product: products[0] };
 }
 
+/** Another unpaid order for `qty` pieces of an existing product (a rival for the same stock). */
+export function makeOrderFor(product, qty = 1) {
+  const ref = { token: cart.newToken() };
+  cart.addItem(ref, product.id, qty);
+  return orders.createFromCart(ref, { customer: { ...CUSTOMER, phone: '+998 90 765 43 21' }, delivery: DELIVERY });
+}
+
 /** A fresh unpaid subscription order. Returns { order, plan }. */
 export function makeSubscriptionOrder({ price = 189000 } = {}) {
   const plan = makePlan({ price });

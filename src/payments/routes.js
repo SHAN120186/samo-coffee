@@ -159,7 +159,10 @@ router.post('/mock/:tx', mockLimiter, (req, res, next) => {
     if (!['success', 'fail', 'cancel'].includes(action)) throw new AppError('validation', 'Неизвестное действие', 400);
     let changed = false;
     if (mockUsable(ctx)) {
-      if (action === 'success') {
+      if (action === 'success' && orders.stockShortage(order).length) {
+        // the goods ran out while the checkout page was open: nothing is "charged"
+        ({ changed } = orders.markPaymentFailed(order.id, { provider: 'mock', paymentId: payment.id, txId: payment.provider_tx_id, reason: 'Товар закончился — оплата не проведена' }));
+      } else if (action === 'success') {
         ({ changed } = orders.markPaid(order.id, { provider: 'mock', paymentId: payment.id, txId: payment.provider_tx_id, amount: payment.amount, raw: { simulated: true } }));
       } else if (action === 'fail') {
         ({ changed } = orders.markPaymentFailed(order.id, { provider: 'mock', paymentId: payment.id, txId: payment.provider_tx_id, reason: 'Банк отклонил операцию (демо)' }));

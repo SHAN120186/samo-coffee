@@ -15,13 +15,20 @@
 // Answers:  0 Success · -1 SIGN CHECK FAILED! · -2 Incorrect parameter amount · -3 Action not found
 //          -4 Already paid · -5 User does not exist (order not found) · -6 Transaction does not exist
 //          -7 Failed to update user (our internal error) · -8 Error in request from click · -9 Transaction cancelled
+//   -4 at Complete means exactly "this transaction was confirmed earlier" (a repeated Complete of the
+//   transaction that paid the order). A Complete for an order paid by ANOTHER payment is answered with
+//   -9 (and reported to the admins): that charge must be reversed, not kept.
+//   Out of stock (stock is not reserved by unpaid orders): Prepare and Complete answer -9.
 // Money effects never happen here: a successful Complete → orders.markPaid(); a Complete that carries
 // error < 0 (Click could not charge the card) cancels the transaction and leaves the order payable.
 import crypto from 'node:crypto';
 import { config } from '../../config.js';
 import { AppError } from '../../lib/errors.js';
+import { escapeTg } from '../../lib/escape.js';
+import { formatSum } from '../../lib/money.js';
 import * as orders from '../../services/orders.js';
 import * as paymentsRepo from '../../services/payments.js';
+import * as notify from '../../services/notify.js';
 import { findOpenAttempt, findOrderByRef, isChargeable, providerReturnUrl, recordAttempt, safeEqual } from '../common.js';
 import { paymentLog } from '../log.js';
 
@@ -121,6 +128,27 @@ function verify(body, action) {
 
 const cancelPayment = (p, note) => paymentsRepo.updatePayment(p.id, { status: 'cancelled', cancelTime: Date.now(), error: String(note || '').slice(0, 300) });
 
+/**
+ * A Complete for an order that another payment has already paid: close this transaction and — when
+ * Click reports that it did charge the customer — tell the staff once, because that money has to go
+ * back (Click reverses a transaction we answer with -9; the cabinet shows whether it did).
+ */
+function refuseDuplicate(order, payment, charged) {
+  if (payment.status === 'pending' || payment.status === 'created') cancelPayment(payment, 'Заказ уже оплачен другим платежом');
+  if (!charged || payment.raw?.duplicate_reported) return;
+  paymentsRepo.updatePayment(payment.id, { raw: { duplicate_reported: true } });
+  paymentLog('click.duplicate_charge', { level: 'error', order: order.id, number: order.number, click_trans_id: payment.provider_tx_id });
+  try {
+    orders.addNote(order.id, `Click: повторное списание по уже оплаченному заказу (транзакция ${payment.provider_tx_id}) отклонено, деньги должны вернуться покупателю`, 'provider:click');
+  } catch { /* the note is best-effort */ }
+  notify.notifyAdmins([
+    '⚠️ <b>Click: второе списание по уже оплаченному заказу</b>',
+    `Заказ ${escapeTg(order.number)} · ${formatSum(payment.amount)}`,
+    `Транзакция Click: <code>${escapeTg(payment.provider_tx_id)}</code>`,
+    'Мы отклонили её (код -9) — Click должен вернуть деньги покупателю. Проверьте в кабинете Click, что возврат прошёл.',
+  ].join('\n'));
+}
+
 function prepare(body) {
   const order = verify(body, ACTION.PREPARE);
   const clickTransId = text(body.click_trans_id);
@@ -130,6 +158,8 @@ function prepare(body) {
   if (!amountMatches(order, body.amount)) throw fail(ERROR.INCORRECT_AMOUNT);
   if (existing && existing.status !== 'pending') throw fail(ERROR.TRANSACTION_CANCELLED);
   if (!order.can_pay || !isChargeable(order)) throw fail(ERROR.TRANSACTION_CANCELLED);
+  // stock is not reserved by unpaid orders: do not let Click charge for goods that ran out
+  if (orders.stockShortage(order).length) throw fail(ERROR.TRANSACTION_CANCELLED);
   if (existing) return { merchant_prepare_id: existing.id }; // repeated Prepare: the same answer
 
   const fields = {
@@ -157,11 +187,17 @@ function complete(body) {
     throw fail(ERROR.TRANSACTION_NOT_FOUND);
   }
   const confirm = { merchant_confirm_id: payment.id };
+  // -4 is reserved for ONE case: Click repeats the Complete of the transaction that paid the order
+  // (it did not get our first answer). The payment stands, nothing is done twice.
   if (payment.status === 'paid') throw Object.assign(fail(ERROR.ALREADY_PAID), { extra: confirm });
+  const clickError = Number(body.error ?? 0);
+  const charged = Number.isFinite(clickError) && clickError >= 0;
   if (order.is_paid) {
-    // paid by another transaction or provider meanwhile — Click returns the money to the customer
-    if (payment.status === 'pending') cancelPayment(payment, 'Заказ уже оплачен другим платежом');
-    throw fail(ERROR.ALREADY_PAID);
+    // The order was paid by ANOTHER payment meanwhile (a second Click transaction, another provider,
+    // "mark as paid" in the panel). This transaction must not be kept: it is cancelled and answered
+    // with -9, never with -4 — "already paid" would tell Click that this very charge was accepted.
+    refuseDuplicate(order, payment, charged);
+    throw fail(ERROR.TRANSACTION_CANCELLED);
   }
   if (!amountMatches(order, body.amount)) throw fail(ERROR.INCORRECT_AMOUNT);
   if (payment.status !== 'pending') throw fail(ERROR.TRANSACTION_CANCELLED);
@@ -170,12 +206,20 @@ function complete(body) {
     throw fail(ERROR.TRANSACTION_CANCELLED);
   }
 
-  const clickError = Number(body.error ?? 0);
-  if (!Number.isFinite(clickError) || clickError < 0) {
+  if (!charged) {
     // Click could not finish the payment on its side (no funds, the customer gave up, …)
     cancelPayment(payment, `Click: ${text(body.error_note).trim() || 'платёж отменён'} (код ${text(body.error)})`);
     if (order.payment_provider === 'click' && order.payment_status === 'pending') {
       orders.markPaymentFailed(order.id, { provider: 'click', reason: 'Click не смог провести платёж' });
+    }
+    throw fail(ERROR.TRANSACTION_CANCELLED);
+  }
+
+  if (orders.stockShortage(order).length) {
+    // the goods ran out between Prepare and Complete: refuse, Click returns the money
+    cancelPayment(payment, 'Товар закончился до подтверждения платежа');
+    if (order.payment_provider === 'click' && order.payment_status === 'pending') {
+      orders.markPaymentFailed(order.id, { provider: 'click', reason: 'Товар закончился — оплата отменена, деньги вернутся' });
     }
     throw fail(ERROR.TRANSACTION_CANCELLED);
   }
@@ -188,7 +232,10 @@ function complete(body) {
       amount: payment.amount,
       raw: { click_paydoc_id: text(body.click_paydoc_id) || payment.raw?.click_paydoc_id || null },
     });
-    if (!result.changed) throw fail(ERROR.ALREADY_PAID);
+    if (!result.changed) {
+      refuseDuplicate(order, payment, true);
+      throw fail(ERROR.TRANSACTION_CANCELLED);
+    }
   } catch (err) {
     if (err instanceof ClickError) throw err;
     if (!(err instanceof AppError)) throw err;

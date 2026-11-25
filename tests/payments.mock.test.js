@@ -17,7 +17,7 @@ import * as settings from '../src/services/settings.js';
 import * as paymentsRepo from '../src/services/payments.js';
 import { startPayment, listProviders, resolveProvider, activeProviderId, getProvider, registerProvider, safeReturnUrl } from '../src/payments/index.js';
 import { redact, setLogSink, paymentLog } from '../src/payments/log.js';
-import { makeOrder, stockOf, purchaseEvents, paidRows } from './payments.helpers.js';
+import { makeOrder, makeOrderFor, stockOf, purchaseEvents, paidRows } from './payments.helpers.js';
 
 let t;
 before(async () => {
@@ -319,4 +319,40 @@ test('production: the demo checkout is OFF — no free "payments" — unless ALL
   assert.equal(on.pageStatus, 200);
   assert.equal(on.postStatus, 303);
   assert.equal(on.paid, true);
+});
+
+test('stock is not reserved by unpaid orders: a payment cannot start, or finish, for goods that ran out', async () => {
+  const { order, product } = makeOrder({ qty: 1, stock: 1 });
+  const rival = makeOrderFor(product, 1);
+  const c = t.newClient();
+  const start = await c.get(order.pay_url);
+  const txPath = pathOf(start.location);
+  await c.get(start.location);
+
+  // somebody else pays for the last unit while the checkout page is open
+  orders.markPaid(rival.id, { provider: 'manual' });
+  assert.equal(stockOf(product), 0);
+  const done = await c.postForm(txPath, { action: 'success' });
+  assert.equal(done.status, 303);
+  const fresh = orders.getOrder(order.id);
+  assert.deepEqual([fresh.is_paid, fresh.payment_status, fresh.can_pay], [false, 'failed', true]);
+  assert.equal(paidRows(order.id).length, 0);
+  assert.equal(purchaseEvents(order.id), 0);
+  assert.equal(stockOf(product), 0);
+
+  // starting again is refused with a message for the customer (409, branded page)
+  await assert.rejects(() => startPayment(fresh), (e) => e.code === 'out_of_stock' && /закончился/.test(e.message));
+  const again = await c.get(order.pay_url);
+  assert.equal(again.status, 409);
+  assert.ok(again.text.includes('закончился'));
+
+  // refunding the rival frees the unit: no phantom stock, and the order can be paid now
+  orders.refund(rival.id);
+  assert.equal(stockOf(product), 1);
+  const retry = await c.get(order.pay_url);
+  assert.equal(retry.status, 302);
+  await c.get(retry.location);
+  await c.postForm(pathOf(retry.location), { action: 'success' });
+  assert.equal(orders.getOrder(order.id).is_paid, true);
+  assert.equal(stockOf(product), 0);
 });

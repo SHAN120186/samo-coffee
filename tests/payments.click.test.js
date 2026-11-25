@@ -12,7 +12,7 @@ import * as subscriptions from '../src/services/subscriptions.js';
 import { startPayment, getProvider } from '../src/payments/index.js';
 import { payUrl, signString, ERROR } from '../src/payments/providers/click.js';
 import { setLogSink } from '../src/payments/log.js';
-import { makeOrder, makeSubscriptionOrder, clickClient, clickFields, clickSign, clickTransId, stockOf, purchaseEvents, paidRows } from './payments.helpers.js';
+import { makeOrder, makeOrderFor, makeSubscriptionOrder, clickClient, clickFields, clickSign, clickTransId, stockOf, purchaseEvents, paidRows } from './payments.helpers.js';
 
 let t;
 let click;
@@ -300,7 +300,7 @@ test('Complete with error < 0 cancels the transaction (-9); the order stays paya
   assert.equal(paidRows(order.id).length, 1);
 });
 
-test('Complete is refused when the order was cancelled (-9) or paid another way (-4) after Prepare', async () => {
+test('Complete is refused with -9 when the order was cancelled or paid another way after Prepare; -4 only for a repeat of the winner', async () => {
   const a = makeOrder();
   const preparedA = await prepare(a.order);
   orders.cancel(a.order.id, { actor: 'admin:1' });
@@ -308,25 +308,68 @@ test('Complete is refused when the order was cancelled (-9) or paid another way 
   assert.equal(orders.getOrder(a.order.id).status, 'cancelled');
   assert.equal(stockOf(a.product), 10);
 
+  // paid in the panel between Prepare and Complete: Click charged the customer, we must not keep it —
+  // "-4 Already paid" would mean "this transaction was confirmed", so the answer is -9 (reversal)
   const b = makeOrder({ qty: 1 });
   const preparedB = await prepare(b.order);
   orders.markPaid(b.order.id, { provider: 'manual', actor: 'admin:1' });
   const res = await complete(b.order, preparedB);
-  assert.equal(res.error, -4);
+  assert.equal(res.error, -9);
+  assert.equal(res.merchant_confirm_id, undefined, 'nothing is confirmed');
   assert.equal(stockOf(b.product), 9, 'charged once');
   assert.equal(purchaseEvents(b.order.id), 1);
   assert.equal(paidRows(b.order.id).length, 1);
-  assert.notEqual(paymentsRepo.getPayment(preparedB.res.merchant_prepare_id).status, 'paid');
+  const refusedB = paymentsRepo.getPayment(preparedB.res.merchant_prepare_id);
+  assert.equal(refusedB.status, 'cancelled');
+  assert.equal(refusedB.raw.duplicate_reported, true, 'the staff is told about the charge that has to go back');
+  assert.ok(orders.getOrderEvents(b.order.id).some((e) => e.type === 'note' && /повторное списание/i.test(e.note)));
+  // Click repeats the refused Complete: the same answer, reported once
+  assert.equal((await complete(b.order, preparedB)).error, -9);
+  assert.equal(orders.getOrderEvents(b.order.id).filter((e) => e.type === 'note' && /повторное списание/i.test(e.note)).length, 1);
 
-  // two Click transactions prepared for one order: the first Complete wins, the second gets -4
+  // two Click transactions prepared for one order: the first Complete wins, the second gets -9;
+  // a repeated Complete of the WINNER is the only case answered with -4
   const c = makeOrder({ qty: 1 });
   const first = await prepare(c.order);
   const second = await prepare(c.order);
   assert.notEqual(first.res.merchant_prepare_id, second.res.merchant_prepare_id);
   assert.equal((await complete(c.order, second)).error, 0);
-  assert.equal((await complete(c.order, first)).error, -4);
+  const loser = await complete(c.order, first);
+  assert.equal(loser.error, -9);
+  assert.equal(loser.merchant_confirm_id, undefined);
+  const repeat = await complete(c.order, second);
+  assert.deepEqual([repeat.error, repeat.merchant_confirm_id], [-4, second.res.merchant_prepare_id]);
   assert.equal(stockOf(c.product), 9);
   assert.equal(paidRows(c.order.id).length, 1);
+  assert.equal(paymentsRepo.getPayment(first.res.merchant_prepare_id).status, 'cancelled');
+
+  // Click reports that it could NOT charge (error < 0) for an already paid order: nothing to return, no alert
+  const d = makeOrder({ qty: 1 });
+  const preparedD = await prepare(d.order);
+  orders.markPaid(d.order.id, { provider: 'manual', actor: 'admin:1' });
+  assert.equal((await complete(d.order, preparedD, { error: '-5017', errorNote: 'Insufficient funds' })).error, -9);
+  assert.equal(paymentsRepo.getPayment(preparedD.res.merchant_prepare_id).raw.duplicate_reported, undefined);
+});
+
+test('stock is checked before Click may charge: Prepare and Complete answer -9 when the goods ran out', async () => {
+  const a = makeOrder({ qty: 2, stock: 2 });
+  const rival = makeOrderFor(a.product, 2);
+  // the rival order takes the whole stock
+  orders.markPaid(rival.id, { provider: 'manual' });
+  assert.equal(stockOf(a.product), 0);
+  assert.equal((await prepare(a.order)).res.error, -9, 'Prepare refuses: nothing is charged');
+  assert.equal(orders.getOrder(a.order.id).can_pay, true, 'the order stays payable for when the stock is back');
+
+  // stock runs out between Prepare and Complete
+  const b = makeOrder({ qty: 1, stock: 1 });
+  const preparedB = await prepare(b.order);
+  assert.equal(preparedB.res.error, 0);
+  const rivalB = makeOrderFor(b.product, 1);
+  orders.markPaid(rivalB.id, { provider: 'manual' });
+  assert.equal((await complete(b.order, preparedB)).error, -9);
+  assert.equal(orders.getOrder(b.order.id).is_paid, false);
+  assert.equal(paymentsRepo.getPayment(preparedB.res.merchant_prepare_id).status, 'cancelled');
+  assert.equal(stockOf(b.product), 0);
 });
 
 // ─────────────────────────────── transport details

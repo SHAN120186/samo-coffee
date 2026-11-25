@@ -5,7 +5,6 @@
 //                                 payment page /pay/order/<token>, which uses the active provider
 import { config } from '../../config.js';
 import * as orders from '../../services/orders.js';
-import * as catalog from '../../services/catalog.js';
 import * as notify from '../../services/notify.js';
 import * as telegramPayments from '../../services/telegramPayments.js';
 import { buildInvoiceParams } from '../../payments/index.js';
@@ -54,17 +53,7 @@ export async function sendPayment(ctx, order) {
 }
 
 /** Product orders: do not charge for goods that ran out while the invoice was waiting. */
-function checkStock(order) {
-  if (order.kind !== 'product') return null;
-  for (const item of order.items) {
-    if (!item.product_id) continue;
-    const product = catalog.getProduct(item.product_id);
-    if (!product || product.stock < item.qty) {
-      return `«${item.title}» только что закончился. Напишите нам — подберём замену или сообщим о новой обжарке.`;
-    }
-  }
-  return null;
-}
+const checkStock = (order) => orders.stockShortageMessage(order) || null;
 
 /** pre_checkout_query: the last check before Telegram charges the customer (must be answered within 10 s). */
 export async function onPreCheckoutQuery(ctx) {
@@ -85,7 +74,8 @@ export async function onPreCheckoutQuery(ctx) {
 
 /**
  * message.successful_payment → orders.markPaid (through telegramPayments.handleSuccessfulPayment).
- * Idempotent: a re-delivered update changes nothing. The "order paid" messages for the customer and
+ * Idempotent: a re-delivered update changes nothing. A second, different charge for an order that
+ * is already paid is recorded and reported to the admins (the money has to be returned). The "order paid" messages for the customer and
  * the admins are sent by the notify service.
  */
 export async function onSuccessfulPayment(ctx) {
@@ -112,16 +102,22 @@ export async function onSuccessfulPayment(ctx) {
     if (payer && getState(payer.id).state === STATES.checkout) clearState(payer.id);
     return result;
   }
+  // a re-delivered update about a duplicate charge that was already reported
+  if (result.reason === 'duplicate_charge' && result.repeated) return result;
 
   // The money has been taken but the order could not be marked as paid — people must look at it.
+  const duplicate = result.reason === 'duplicate_charge';
   await notify.notifyAdmins([
-    '⚠️ <b>Платёж в Telegram требует проверки</b>',
+    duplicate ? '⚠️ <b>Telegram: второе списание по уже оплаченному заказу — нужен возврат</b>' : '⚠️ <b>Платёж в Telegram требует проверки</b>',
+    duplicate && result.order ? `Заказ ${escapeTg(result.order.number)} уже оплачен${result.paidBy ? ` (${escapeTg(result.paidBy.provider)})` : ''}` : null,
     `Причина: <code>${escapeTg(result.reason)}</code>`,
     `Payload: <code>${escapeTg(payment.invoice_payload)}</code>`,
     `Сумма: ${escapeTg(String(payment.total_amount / 100))} ${escapeTg(payment.currency)}`,
     `Charge id: <code>${escapeTg(payment.telegram_payment_charge_id)}</code>`,
     payer ? `Плательщик: ${escapeTg([payer.first_name, payer.last_name].filter(Boolean).join(' '))}${payer.username ? ` @${escapeTg(payer.username)}` : ''} · id <code>${payer.id}</code>` : null,
   ].filter(Boolean).join('\n'));
-  await ctx.reply('Мы получили платёж, но не смогли автоматически привязать его к заказу. Уже разбираемся — напишем вам в этот чат.');
+  await ctx.reply(duplicate
+    ? 'Этот заказ уже был оплачен, а платёж прошёл ещё раз. Лишнее списание вернём — уже разбираемся и напишем вам в этот чат.'
+    : 'Мы получили платёж, но не смогли автоматически привязать его к заказу. Уже разбираемся — напишем вам в этот чат.');
   return result;
 }

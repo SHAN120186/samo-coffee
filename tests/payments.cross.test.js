@@ -45,6 +45,8 @@ const clickPrepare = async (order) => {
   return { fields, res: await click('prepare', fields) };
 };
 const clickComplete = (order, prepared, over = {}) => click('complete', clickFields(order, { clickTransId: prepared.fields.click_trans_id, prepareId: prepared.res.merchant_prepare_id, ...over }));
+/** [ok, reason, repeated] of a handleSuccessfulPayment result. */
+const dup = (r) => [r.ok, r.reason, r.repeated];
 const tgPaid = (order, chargeId) => telegramPayments.handleSuccessfulPayment({ invoice_payload: `order:${order.id}`, currency: 'UZS', total_amount: order.total * 100, telegram_payment_charge_id: chargeId });
 
 /** Open an attempt with every provider for one order; returns the handles. */
@@ -109,14 +111,21 @@ test('Click completes first → Payme, mock, Telegram and a second Click are all
   assert.equal((await paymeCreate(order)).res.error.code, -31051);
   assert.equal((await rpc('CheckPerformTransaction', { amount: order.total * 100, account: { order_id: String(order.id) } })).error.code, -31051);
   assert.equal((await h.c.postForm(h.mockPath, { action: 'success' })).status, 303);
-  assert.deepEqual([tgPaid(order, 'tg-late-1').ok, tgPaid(order, 'tg-late-1').changed], [true, false]);
+  // a real Telegram charge that arrives after the order was paid is NOT a replay: it is recorded and reported
+  assert.deepEqual(dup(tgPaid(order, 'tg-late-1')), [false, 'duplicate_charge', false]);
+  assert.deepEqual(dup(tgPaid(order, 'tg-late-1')), [false, 'duplicate_charge', true], 're-delivery of that update is recognised');
   assert.equal(telegramPayments.validatePreCheckout({ invoice_payload: `order:${order.id}`, currency: 'UZS', total_amount: order.total * 100 }).ok, false);
-  assert.equal((await clickComplete(order, rival)).error, -4);
-  assert.equal((await clickComplete(order, h.prepared)).error, -4);
+  assert.equal((await clickComplete(order, rival)).error, -9, 'a second Click charge is refused (Click reverses it), not confirmed');
+  await notify.flush();
+  assert.ok(fake.callsTo('sendMessage').some((p) => p.text.includes('Click: второе списание') && p.text.includes(order.number)), 'the admins are told about the second Click charge');
+  assert.equal((await clickComplete(order, h.prepared)).error, -4, 'only a repeat of the winning Complete is "already paid"');
   await assert.rejects(() => startPayment(orders.getOrder(order.id)), (e) => e.code === 'already_paid');
 
   assertPaidOnce(order, product, { qty: 2, provider: 'click' });
-  assert.ok(paymentsRepo.listByOrder(order.id).every((p) => p.status === 'paid' || p.status === 'cancelled'), 'no attempt is left open');
+  assert.ok(paymentsRepo.listByOrder(order.id).every((p) => ['paid', 'cancelled', 'failed'].includes(p.status)), 'no attempt is left open');
+  const late = paymentsRepo.findByProviderTx('telegram', 'tg-late-1');
+  assert.deepEqual([late.status, late.amount], ['failed', order.total], 'the duplicate Telegram charge is on record');
+  assert.match(late.error, /Повторное списание/);
 });
 
 test('Payme performs first → Click, mock and Telegram are refused', async () => {
@@ -126,10 +135,10 @@ test('Payme performs first → Click, mock and Telegram are refused', async () =
   assert.equal((await rpc('PerformTransaction', { id: h.payme.id })).result.state, 2);
   assertPaidOnce(order, product, { qty: 3, provider: 'payme' });
 
-  assert.equal((await clickComplete(order, h.prepared)).error, -4);
-  assert.equal((await clickPrepare(order)).res.error, -4);
+  assert.equal((await clickComplete(order, h.prepared)).error, -9);
+  assert.equal((await clickPrepare(order)).res.error, -4, 'a new Prepare for a paid order: nothing was charged yet');
   assert.equal((await h.c.postForm(h.mockPath, { action: 'success' })).status, 303);
-  assert.equal(tgPaid(order, 'tg-late-2').changed, false);
+  assert.equal(tgPaid(order, 'tg-late-2').reason, 'duplicate_charge');
   assert.equal((await rpc('PerformTransaction', { id: h.payme.id })).result.state, 2, 'the winner stays idempotent');
   assert.equal((await paymeCreate(order)).res.error.code, -31051);
 
@@ -142,8 +151,8 @@ test('mock pays first → Payme and Click callbacks are refused; Telegram first 
   assert.equal((await ha.c.postForm(ha.mockPath, { action: 'success' })).status, 303);
   assertPaidOnce(a.order, a.product, { qty: 1, provider: 'mock' });
   assert.equal((await rpc('PerformTransaction', { id: ha.payme.id })).error.code, -31008);
-  assert.equal((await clickComplete(a.order, ha.prepared)).error, -4);
-  assert.equal(tgPaid(a.order, 'tg-late-3').changed, false);
+  assert.equal((await clickComplete(a.order, ha.prepared)).error, -9);
+  assert.equal(tgPaid(a.order, 'tg-late-3').reason, 'duplicate_charge');
   assertPaidOnce(a.order, a.product, { qty: 1, provider: 'mock' });
 
   const b = makeOrder({ qty: 4 });
@@ -152,8 +161,10 @@ test('mock pays first → Payme and Click callbacks are refused; Telegram first 
   assertPaidOnce(b.order, b.product, { qty: 4, provider: 'telegram' });
   assert.equal(paidRows(b.order.id)[0].provider_tx_id, 'tg-first-1');
   assert.equal((await rpc('PerformTransaction', { id: hb.payme.id })).error.code, -31008);
-  assert.equal((await clickComplete(b.order, hb.prepared)).error, -4);
+  assert.equal((await clickComplete(b.order, hb.prepared)).error, -9);
   assert.equal((await hb.c.postForm(hb.mockPath, { action: 'success' })).status, 303);
+  // a second, different Telegram charge for the order Telegram already paid
+  assert.deepEqual(dup(tgPaid(b.order, 'tg-second-1')), [false, 'duplicate_charge', false]);
   assertPaidOnce(b.order, b.product, { qty: 4, provider: 'telegram' });
 });
 
@@ -165,7 +176,7 @@ test('a subscription paid twice by different providers is extended once', async 
   const sub = subscriptions.getCurrentForCustomer(orders.getOrder(order.id).customer_id);
   assert.deepEqual([sub.plan_id, sub.status], [plan.id, 'active']);
   assert.equal((await rpc('PerformTransaction', { id: payme.id })).error.code, -31008);
-  assert.equal(tgPaid(order, 'tg-sub-late').changed, false);
+  assert.equal(tgPaid(order, 'tg-sub-late').reason, 'duplicate_charge');
   const after = subscriptions.getSubscription(sub.id);
   assert.deepEqual([after.current_period_end, after.renewals], [sub.current_period_end, sub.renewals]);
 });

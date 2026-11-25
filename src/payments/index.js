@@ -99,7 +99,7 @@ export { invoicePayload, parseInvoicePayload, buildInvoiceParams };
  * @param {{ returnUrl?: string, channel?: string, tgUserId?: number, providerId?: string }} [ctx]
  *   returnUrl — same-site path or URL under BASE_URL (anything else → the order status page)
  * @returns {Promise<{ provider: string, redirectUrl?: string, invoiceLink?: string }>}
- * @throws AppError 'not_found' | 'already_paid' | 'order_closed' | 'amount_invalid' | 'payment_unavailable';
+ * @throws AppError 'not_found' | 'already_paid' | 'order_closed' | 'amount_invalid' | 'out_of_stock' | 'payment_unavailable';
  *         provider errors (e.g. TelegramError) are passed through
  */
 export async function startPayment(order, ctx = {}) {
@@ -108,6 +108,11 @@ export async function startPayment(order, ctx = {}) {
   if (current.payment_status === 'paid') throw new AppError('already_paid', 'Заказ уже оплачен', 409);
   if (!current.can_pay) throw new AppError('order_closed', 'Этот заказ нельзя оплатить', 409);
   if (!isChargeable(current)) throw new AppError('amount_invalid', 'Сумма заказа некорректна — оплата невозможна', 409);
+  // Unpaid orders do not reserve stock: never send the customer to pay for goods that ran out.
+  const shortage = orders.stockShortage(current);
+  if (shortage.length) {
+    throw new AppError('out_of_stock', orders.stockShortageMessage(current), 409, { items: shortage });
+  }
 
   const provider = resolveProvider(ctx.providerId);
   const fresh = orders.markPendingPayment(current.id, provider.id);

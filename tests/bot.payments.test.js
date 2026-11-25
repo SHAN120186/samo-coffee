@@ -219,6 +219,54 @@ test('a payment that cannot be matched to an order is escalated to the admins, n
   assert.match(lastText(fake, user.id).text, /получили платёж/);
 });
 
+test('a second, different Telegram charge for an already paid order is recorded and escalated — not treated as a replay', async () => {
+  // the same invoice paid twice (two clients / a reused link)
+  const user = makeUser(9010);
+  const order = await buy(user, shop.products[2]);
+  const amount = order.total * 100;
+  await send(preCheckout(user, { payload: `order:${order.id}`, amount }));
+  await send(successfulPayment(user, { payload: `order:${order.id}`, amount, chargeId: 'chg_A' }));
+  assert.equal(orders.getOrder(order.id).payment_provider, 'telegram');
+  const stock = catalog.getProduct(shop.products[2].id).stock;
+
+  fake.reset();
+  const second = successfulPayment(user, { payload: `order:${order.id}`, amount, chargeId: 'chg_B' });
+  await send(second);
+  const rows = payments.listByOrder(order.id);
+  assert.deepEqual(rows.map((p) => [p.provider_tx_id, p.status]).sort(), [['chg_A', 'paid'], ['chg_B', 'failed']]);
+  const dup = payments.findByProviderTx('telegram', 'chg_B');
+  assert.equal(dup.amount, order.total);
+  assert.match(dup.error, /Повторное списание/);
+  assert.equal(catalog.getProduct(shop.products[2].id).stock, stock, 'nothing is fulfilled twice');
+  assert.equal(all(`SELECT id FROM events WHERE name = 'purchase' AND order_id = ?`, order.id).length, 1);
+  assert.ok(orders.getOrderEvents(order.id).some((e) => e.type === 'note' && e.note.includes('chg_B')));
+  const alert = lastText(fake, ADMIN_CHAT_ID);
+  assert.match(alert.text, /второе списание по уже оплаченному заказу/);
+  assert.ok(alert.text.includes(order.number));
+  assert.ok(alert.text.includes('chg_B'));
+  assert.ok(alert.text.includes('duplicate_charge'));
+  assert.match(lastText(fake, user.id).text, /уже был оплачен/);
+
+  // Telegram re-delivers that second update: recognised, nobody is alerted again
+  fake.reset();
+  await send(second);
+  assert.equal(fake.calls.length, 0);
+  assert.equal(payments.listByOrder(order.id).length, 2);
+
+  // the window after an approved pre_checkout: the order gets paid in the panel, then Telegram charges
+  const other = makeUser(9011);
+  const order2 = await buy(other, shop.products[2]);
+  await send(preCheckout(other, { payload: `order:${order2.id}`, amount: order2.total * 100 }));
+  assert.equal(fake.callsTo('answerPreCheckoutQuery').at(-1).ok, true);
+  orders.markPaid(order2.id, { provider: 'manual', actor: 'admin:1' });
+  await notify.flush();
+  fake.reset();
+  await send(successfulPayment(other, { payload: `order:${order2.id}`, amount: order2.total * 100, chargeId: 'chg_C' }));
+  assert.equal(orders.getOrder(order2.id).payment_provider, 'manual');
+  assert.equal(payments.findByProviderTx('telegram', 'chg_C').status, 'failed');
+  assert.match(lastText(fake, ADMIN_CHAT_ID).text, /второе списание/);
+});
+
 test('an invoice link paid for an order without a Telegram user links the payer; a refused invoice falls back to the hosted page', async () => {
   const product = shop.products[2];
   const ref = { token: cart.newToken() };

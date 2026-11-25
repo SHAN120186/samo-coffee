@@ -157,6 +157,8 @@ export function subscriptionStats() {
  * inside its transaction — do not call directly from routes.
  * Same plan active → period is extended from max(now, current end); otherwise the previous
  * active/paused subscription is cancelled and a new one starts now.
+ * The granted period is recorded in `subscription_periods` (one row per order), so that a refund of
+ * ANY order of the subscription can be reverted exactly (revertFromOrder).
  * @returns {{ subscription: object, renewed: boolean }}
  */
 export function activateFromOrder(order) {
@@ -169,12 +171,17 @@ export function activateFromOrder(order) {
     const ts = now();
     const current = get(
       `SELECT * FROM subscriptions WHERE customer_id = ? AND status IN ('active', 'paused') ORDER BY id DESC LIMIT 1`, order.customer_id);
+    const recordPeriod = (subscriptionId, replaced = null) => run(
+      `INSERT INTO subscription_periods (subscription_id, order_id, days, replaced_subscription_id, replaced_status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      subscriptionId, order.id, plan.period_days, replaced?.id ?? null, replaced?.status ?? null, ts);
     if (current && current.plan_id === plan.id) {
       const base = Math.max(Date.now(), Date.parse(current.current_period_end));
       run(
         `UPDATE subscriptions SET status = 'active', current_period_end = ?, last_order_id = ?, renewals = renewals + 1, updated_at = ? WHERE id = ?`,
         new Date(base + plan.period_days * DAY).toISOString(), order.id, ts, current.id,
       );
+      recordPeriod(current.id);
       return { subscription: getSubscription(current.id), renewed: true };
     }
     if (current) {
@@ -185,27 +192,61 @@ export function activateFromOrder(order) {
        VALUES (?, ?, 'active', ?, ?, ?, ?, ?)`,
       order.customer_id, plan.id, ts, new Date(Date.now() + plan.period_days * DAY).toISOString(), order.id, ts, ts,
     );
+    recordPeriod(Number(lastInsertRowid), current || null);
     return { subscription: getSubscription(Number(lastInsertRowid)), renewed: false };
   });
 }
 
 /**
- * Undo the effect of a refunded subscription order: a renewal loses one period,
- * a first payment cancels the subscription. Called by orders.refund().
+ * Undo the effect of a refunded subscription order — whichever order of the subscription it is:
+ *   • the period this order granted is taken off the subscription's end date;
+ *   • when no paid period is left, the subscription is cancelled, and the subscription it had
+ *     replaced (an order for another plan cancels the previous one) is restored if its paid time
+ *     has not run out and the customer has no other current subscription.
+ * Called by orders.refund() inside its transaction.
+ * @returns {object|null} the subscription after the change (null when the order granted nothing)
  */
 export function revertFromOrder(order) {
-  const sub = get('SELECT * FROM subscriptions WHERE last_order_id = ?', order.id);
+  const ts = now();
+  const period = get('SELECT * FROM subscription_periods WHERE order_id = ? AND reverted_at IS NULL', order.id);
+  const sub = period
+    ? get('SELECT * FROM subscriptions WHERE id = ?', period.subscription_id)
+    : legacySubscriptionOf(order);
   if (!sub) return null;
   const plan = get('SELECT period_days FROM plans WHERE id = ?', sub.plan_id);
-  const ts = now();
-  if (sub.renewals > 0 && plan) {
-    const end = Date.parse(sub.current_period_end) - plan.period_days * DAY;
-    run(`UPDATE subscriptions SET current_period_end = ?, renewals = renewals - 1, status = ?, updated_at = ? WHERE id = ?`,
-      new Date(end).toISOString(), end > Date.now() ? sub.status : 'expired', ts, sub.id);
-  } else {
-    run(`UPDATE subscriptions SET status = 'cancelled', cancelled_at = ?, updated_at = ? WHERE id = ?`, ts, ts, sub.id);
+  const days = period ? period.days : plan?.period_days || 0;
+  if (period) run('UPDATE subscription_periods SET reverted_at = ? WHERE id = ?', ts, period.id);
+
+  const left = get('SELECT COUNT(*) AS n, MAX(order_id) AS last_order_id FROM subscription_periods WHERE subscription_id = ? AND reverted_at IS NULL', sub.id);
+  // subscriptions paid before `subscription_periods` existed may have unrecorded periods: `renewals` counts them
+  const periodsLeft = Math.max(left.n, sub.renewals);
+  if (periodsLeft > 0) {
+    const end = Date.parse(sub.current_period_end) - days * DAY;
+    const current = sub.status === 'active' || sub.status === 'paused';
+    run(`UPDATE subscriptions SET current_period_end = ?, renewals = MAX(0, renewals - 1), status = ?, last_order_id = ?, updated_at = ? WHERE id = ?`,
+      new Date(end).toISOString(), current && end <= Date.now() ? 'expired' : sub.status,
+      left.last_order_id ?? (sub.last_order_id === order.id ? null : sub.last_order_id), ts, sub.id);
+    return getSubscription(sub.id);
+  }
+
+  run(`UPDATE subscriptions SET status = 'cancelled', cancelled_at = COALESCE(cancelled_at, ?), updated_at = ? WHERE id = ?`, ts, ts, sub.id);
+  // This order had replaced a subscription to another plan: the customer still paid for that one.
+  const replaced = period?.replaced_subscription_id ? get('SELECT * FROM subscriptions WHERE id = ?', period.replaced_subscription_id) : null;
+  const hasCurrent = get(`SELECT 1 AS x FROM subscriptions WHERE customer_id = ? AND status IN ('active', 'paused') LIMIT 1`, sub.customer_id);
+  if (replaced && replaced.status === 'cancelled' && !hasCurrent && Date.parse(replaced.current_period_end) > Date.now()) {
+    run(`UPDATE subscriptions SET status = ?, cancelled_at = NULL, updated_at = ? WHERE id = ?`,
+      period.replaced_status === 'paused' ? 'paused' : 'active', ts, replaced.id);
   }
   return getSubscription(sub.id);
+}
+
+/** Subscription of an order paid before periods were recorded: by last_order_id, else the customer's latest for that plan. */
+function legacySubscriptionOf(order) {
+  return get('SELECT * FROM subscriptions WHERE last_order_id = ?', order.id)
+    || (order.customer_id && order.plan_id
+      ? get(`SELECT * FROM subscriptions WHERE customer_id = ? AND plan_id = ? AND status <> 'cancelled' ORDER BY id DESC LIMIT 1`, order.customer_id, order.plan_id)
+      : null)
+    || null;
 }
 
 /**

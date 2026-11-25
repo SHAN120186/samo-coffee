@@ -9,6 +9,7 @@ import * as tg from '../lib/telegramApi.js';
 import { sumToTiyin, tiyinToSum } from '../lib/money.js';
 import { truncate } from '../lib/escape.js';
 import * as orders from './orders.js';
+import * as paymentsRepo from './payments.js';
 
 /** Telegram invoice payload for an order. */
 export const invoicePayload = (orderId) => `order:${orderId}`;
@@ -71,9 +72,19 @@ export function validatePreCheckout(query) {
 }
 
 /**
- * Apply message.successful_payment. Idempotent (delegates to orders.markPaid).
+ * Apply message.successful_payment. Idempotent for a re-delivered update (same charge id).
+ *
+ * A DIFFERENT charge for an order that is already paid is not a replay: the customer was charged a
+ * second time (the order got paid by another provider / the panel / a second client between the
+ * approved pre_checkout_query and this message). That charge is stored as its own payments row
+ * (status 'failed', with an explanation) and reported as { ok: false, reason: 'duplicate_charge' }
+ * so the caller alerts the staff and the money can be returned.
+ *
  * @param {{ invoice_payload: string, currency: string, total_amount: number, telegram_payment_charge_id: string, provider_payment_charge_id?: string }} payment
- * @returns {{ ok: true, order: object, changed: boolean } | { ok: false, reason: 'bad_payload'|'not_found'|'amount_mismatch'|'order_closed' }}
+ * @returns {{ ok: true, order: object, changed: boolean }
+ *   | { ok: false, reason: 'bad_payload'|'not_found'|'amount_mismatch'|'order_closed' }
+ *   | { ok: false, reason: 'duplicate_charge', order: object, paidBy: object|null, repeated: boolean }}
+ *   repeated = this duplicate charge was already recorded (the update was delivered again)
  */
 export function handleSuccessfulPayment(payment) {
   const orderId = parseInvoicePayload(payment?.invoice_payload);
@@ -84,14 +95,26 @@ export function handleSuccessfulPayment(payment) {
   } catch {
     return { ok: false, reason: 'amount_mismatch' };
   }
+  const chargeId = String(payment.telegram_payment_charge_id ?? '');
+  const raw = { provider_payment_charge_id: payment.provider_payment_charge_id || null, currency: payment.currency };
   try {
-    const result = orders.markPaid(orderId, {
-      provider: 'telegram',
-      txId: payment.telegram_payment_charge_id,
-      amount,
-      raw: { provider_payment_charge_id: payment.provider_payment_charge_id || null, currency: payment.currency },
+    const result = orders.markPaid(orderId, { provider: 'telegram', txId: chargeId, amount, raw });
+    if (result.changed) return { ok: true, order: result.order, changed: true };
+
+    const paidBy = result.payment;
+    if (paidBy && paidBy.provider === 'telegram' && String(paidBy.provider_tx_id ?? '') === chargeId) {
+      return { ok: true, order: result.order, changed: false }; // the same update again
+    }
+    // paid earlier by something else → this is a second, real charge
+    const known = chargeId ? paymentsRepo.findByProviderTx('telegram', chargeId) : null;
+    if (known) return { ok: false, reason: 'duplicate_charge', order: result.order, paidBy, repeated: true };
+    const paidByText = paidBy ? `${paidBy.provider}${paidBy.provider_tx_id ? ` ${paidBy.provider_tx_id}` : ''}` : 'другим способом';
+    const row = paymentsRepo.createPayment({
+      orderId, provider: 'telegram', providerTxId: chargeId || null, amount, status: 'failed', raw: { ...raw, duplicate_of: paidBy?.id ?? null },
     });
-    return { ok: true, order: result.order, changed: result.changed };
+    paymentsRepo.updatePayment(row.id, { error: `Повторное списание: заказ уже оплачен (${paidByText}). Деньги нужно вернуть покупателю.` });
+    orders.addNote(orderId, `Telegram: повторное списание по уже оплаченному заказу (charge ${chargeId || '—'}) — нужен возврат`, 'provider:telegram');
+    return { ok: false, reason: 'duplicate_charge', order: result.order, paidBy, repeated: false };
   } catch (err) {
     if (['not_found', 'amount_mismatch', 'order_closed'].includes(err.code)) return { ok: false, reason: err.code };
     throw err;

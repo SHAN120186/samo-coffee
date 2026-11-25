@@ -164,10 +164,11 @@ ASCII-only: `WHERE ulower(name) LIKE ?` with a lower-cased needle.
 | `customers` | `name, phone (+998…), email, tg_user_id (unique), tg_username, address, source site|tma|bot|admin, notes` |
 | `carts`, `cart_items` | cart by `token` (site cookie) or `tg_user_id` (mini app) |
 | `orders` | `number (SC-1000NN), public_token, customer_id, kind product|subscription, plan_id, status, payment_status, payment_provider, channel site|tma|bot|admin, subtotal, delivery_fee, discount, total, customer_name/phone/email, delivery_method courier|pickup, delivery_address, comment, tg_user_id, session_id, source, admin_note, paid_at, cancelled_at` |
-| `order_items` | snapshots: `product_id | plan_id, title, image, price, qty, total` |
+| `order_items` | snapshots: `product_id | plan_id, title, image, price, qty, total`; `stock_taken` — units really taken from stock when the order was paid (`NULL` before payment / legacy rows) |
 | `order_events` | history: `type created|status|payment|note, from_value, to_value, note, actor` |
 | `payments` | `order_id, provider, provider_tx_id (unique per provider), amount (sums), status created|pending|paid|cancelled|failed|refunded, state (Payme 1/2/-1/-2), reason, error, create_time, perform_time, cancel_time (ms), raw (JSON)` |
 | `subscriptions` | `customer_id, plan_id, status active|paused|cancelled|expired, started_at, current_period_end, last_order_id, renewals, cancelled_at` |
+| `subscription_periods` | one row per paid subscription order: `subscription_id, order_id (unique), days, replaced_subscription_id, replaced_status, reverted_at` — lets a refund revert exactly the period of that order |
 | `feedback_threads` | `channel site|bot|tma, customer_id, tg_user_id, tg_chat_id, name, contact, subject, status open|answered|closed, unread, last_message_at` |
 | `feedback_messages` | `thread_id, direction in|out, text, admin_id, via panel|telegram, tg_message_id, admin_chat_message_id, delivered` |
 | `media` | `filename (random), original_name, mime, size, url (/uploads/…), alt, uploaded_by` |
@@ -310,7 +311,9 @@ delivery_method_label, kind_label, is_paid, can_pay, url` (`/order/<public_token
 | **`markPaid(orderId, { provider, txId, paymentId, amount, raw, actor })`** → `{ order, changed, payment, subscription? }` | **the single entry point for successful payments**, idempotent (§7) |
 | `markPaymentFailed(orderId, { provider, txId, paymentId, reason })` → `{ order, changed }` | order stays payable |
 | `cancel(orderId, { actor, reason })` → `{ order, changed }` | unpaid orders only (`paid_order` otherwise) |
-| `refund(orderId, { actor, reason })` → `{ order, changed }` | paid orders: restores stock, reverts the subscription period; idempotent |
+| `refund(orderId, { actor, reason })` → `{ order, changed }` | paid orders: returns the stock the payment took (`order_items.stock_taken`), reverts the subscription period granted by this order (any order of the subscription); idempotent |
+| `stockShortage(order)` → `[{ product_id, title, qty, stock }]`, `stockShortageMessage(order)` | lines the stock cannot cover right now. Unpaid orders reserve nothing, so **every payment path checks this before the customer is charged** (`payments.startPayment`, Telegram pre-checkout, Payme, Click, mock) |
+| `attachTgUser(orderId, tgUserId)`, `assignCustomer(orderId, customerId)` | link a site order to a Telegram user / move it to another customer record (bot deep link, after the phone is verified) |
 | `setStatus(orderId, status, { actor, note })` → `{ order, changed }` | admin action; validates the machine and dispatches `paid`→`markPaid('manual')`, `cancelled`→`cancel`, `refunded`→`refund` |
 | `addNote(orderId, note, actor)`, `setAdminNote(orderId, text)` | |
 | constants | `ORDER_STATUSES, PAYMENT_STATUSES, TRANSITIONS, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS, CHANNEL_LABELS, DELIVERY_METHOD_LABELS, KIND_LABELS` |
@@ -329,7 +332,7 @@ Actors: `'system'`, `'customer'`, `'admin:<id>'`, `'provider:<id>'`.
 | `subscriptionStats()` → `{ active, paused, cancelled, expired, mrr }` | |
 | `setSubscriptionStatus(id, status)`, `pauseSubscription(id)`, `resumeSubscription(id)`, `cancelSubscription(id)` | throws `bad_transition` |
 | `expireDue()` | hourly housekeeping (server.js) |
-| `activateFromOrder(order)`, `revertFromOrder(order)` | **internal** — called by `orders.markPaid` / `orders.refund` only |
+| `activateFromOrder(order)`, `revertFromOrder(order)` | **internal** — called by `orders.markPaid` / `orders.refund` only. Every paid order is recorded in `subscription_periods`; a refund takes off exactly that order's period, cancels the subscription when no paid period is left and restores the subscription that the order had replaced (other plan) |
 | constants | `SUBSCRIPTION_STATUS_LABELS` |
 
 ### 5.9 `payments.js` — payment rows (data access for providers)
@@ -350,7 +353,7 @@ Actors: `'system'`, `'customer'`, `'admin:<id>'`, `'provider:<id>'`.
 | `buildInvoice(order)` → `{ title, description, payload, provider_token, currency, prices }` | prices in tiyin, sum = order total |
 | `async createInvoiceLink(order)` → URL | used by the `telegram` provider |
 | `validatePreCheckout(query)` → `{ ok: true, order } | { ok: false, errorMessage }` | bot: `answerPreCheckoutQuery` |
-| `handleSuccessfulPayment(successfulPayment)` → `{ ok: true, order, changed } | { ok: false, reason }` | bot: on `message.successful_payment`; calls `orders.markPaid` |
+| `handleSuccessfulPayment(successfulPayment)` → `{ ok: true, order, changed } | { ok: false, reason }` | bot: on `message.successful_payment`; calls `orders.markPaid`. The same charge id again → `changed: false`. A **different** charge id for an already paid order → `{ ok: false, reason: 'duplicate_charge', order, paidBy, repeated }`: the charge is stored as a `failed` payments row and the bot alerts the admins (the money has to be returned) |
 
 ### 5.11 `feedback.js`
 
@@ -463,7 +466,7 @@ router.use(auth.requireAdmin);       // everything below needs a session
 |---|---|
 | `notifyAdmins(html, extra)` → Promise<Message|null> | to `ADMIN_CHAT_ID` |
 | `notifyTgUser(tgUserId, html, extra)` | marks blocked users |
-| `orderCreated(order)`, `orderPaid(order)`, `orderStatusChanged(order, from, to)`, `paymentFailed(order)`, `subscriptionActivated(sub, order, renewed)` | **already called by the order service** — do not call them again |
+| `orderCreated(order)`, `orderPaid(order)`, `orderOversold(order, items)`, `orderStatusChanged(order, from, to)`, `paymentFailed(order)`, `subscriptionActivated(sub, order, renewed)` | **already called by the order service** — do not call them again |
 | `formatOrderForAdmin(order, title)`, `orderUrl(order)`, `adminOrderUrl(order)` | |
 | `isEnabled()`, `async flush()` | flush = await in-flight notifications (tests, shutdown) |
 
@@ -536,6 +539,11 @@ Artwork shipped in `public/img`: `logo.svg`, `logo-light.svg` (for dark backgrou
      subscription activated/extended (subscription orders), `purchase` event, history. After commit:
      notifications (admins + customer) and bus events `order.paid`, `subscription.activated`.
      `amount`, when passed, must equal `order.total` (`amount_mismatch` otherwise).
+     Stock is **not reserved** by unpaid orders: a provider must refuse a payment for goods that ran
+     out *before* the customer is charged (`orders.stockShortage(order)`; `startPayment` does it for
+     every provider and throws `out_of_stock`). `markPaid` itself never fails on a shortage (the money
+     is already taken): it takes what the stock has, stores it in `order_items.stock_taken` and
+     alerts the admins.
    - failure → `orders.markPaymentFailed(orderId, { provider, txId, reason })` — order stays payable.
    - refund → `orders.refund(orderId)`.
 4. **Return** — the customer lands on `returnUrl`, default **`/order/<public_token>`** — the SITE

@@ -12,7 +12,7 @@ import * as subscriptions from '../src/services/subscriptions.js';
 import { startPayment, getProvider } from '../src/payments/index.js';
 import { checkoutUrl, checkAuth, TIMEOUT_MS, STATE, REASON, ERROR } from '../src/payments/providers/payme.js';
 import { setLogSink } from '../src/payments/log.js';
-import { makeOrder, makeSubscriptionOrder, paymeAuth, paymeClient, paymeTxId, stockOf, purchaseEvents, paidRows, HOUR } from './payments.helpers.js';
+import { makeOrder, makeOrderFor, makeSubscriptionOrder, paymeAuth, paymeClient, paymeTxId, stockOf, purchaseEvents, paidRows, HOUR } from './payments.helpers.js';
 
 let t;
 let rpc;
@@ -590,4 +590,79 @@ test('callbacks are logged as structured entries without credentials', async () 
   assert.ok(!dump.includes('stolen-key'));
   assert.ok(!dump.includes(Buffer.from(`Paycom:${PAYME_KEY}`).toString('base64')));
   assert.ok(!/authorization/i.test(dump));
+});
+
+// ─────────────────────────────── stock and the half-performed state
+
+test('stock is checked before Payme may charge: -31053 on CheckPerform / Create, -31008 on Perform', async () => {
+  const { order, product } = makeOrder({ qty: 1, stock: 1 });
+  const rival = makeOrderFor(product, 1);
+  const waiting = await create(order);
+  assert.equal(waiting.res.result.state, 1);
+
+  // another customer gets the last unit
+  orders.markPaid(rival.id, { provider: 'manual' });
+  assert.equal(stockOf(product), 0);
+
+  // the goods ran out after CreateTransaction: Perform is refused, Payme returns the money
+  const perform = await rpc('PerformTransaction', { id: waiting.id });
+  assert.equal(perform.error.code, ERROR.CANNOT_PERFORM);
+  assert.deepEqual([row(waiting.id).state, row(waiting.id).status], [STATE.CANCELLED, 'cancelled']);
+  let fresh = orders.getOrder(order.id);
+  assert.deepEqual([fresh.is_paid, fresh.can_pay, fresh.payment_status], [false, true, 'failed']);
+  assert.equal(stockOf(product), 0);
+
+  // and a new payment cannot even start
+  const check = await rpc('CheckPerformTransaction', { amount: tiyin(order), account: account(order) });
+  assert.equal(check.error.code, ERROR.OUT_OF_STOCK);
+  assert.equal(check.error.code, -31053);
+  assert.equal(check.error.data, 'order_id');
+  assert.equal((await create(order)).res.error.code, -31053);
+  await assert.rejects(() => startPayment(orders.getOrder(order.id), { providerId: 'payme' }), (e) => e.code === 'out_of_stock' && e.status === 409);
+
+  // the stock is back (the rival order was refunded) → payable again
+  orders.refund(rival.id);
+  assert.equal(stockOf(product), 1);
+  assert.equal((await rpc('CheckPerformTransaction', { amount: tiyin(order), account: account(order) })).result.allow, true);
+  const again = await create(order);
+  assert.equal((await rpc('PerformTransaction', { id: again.id })).result.state, 2);
+  fresh = orders.getOrder(order.id);
+  assert.equal(fresh.is_paid, true);
+  assert.equal(stockOf(product), 0);
+});
+
+test('CancelTransaction of a transaction that already paid the order (state not saved) is a refund, not a plain cancel', async () => {
+  // the stop between orders.markPaid() and saving state 2 that PerformTransaction recovers from
+  const { order, product } = makeOrder({ qty: 2 });
+  const { id } = await create(order);
+  orders.markPaid(order.id, { provider: 'payme', paymentId: row(id).id, txId: id, amount: order.total });
+  assert.deepEqual([row(id).state, row(id).status], [1, 'paid']);
+  assert.equal(stockOf(product), 8);
+
+  const res = await rpc('CancelTransaction', { id, reason: REASON.EXECUTION_ERROR });
+  assert.equal(res.result.state, STATE.CANCELLED_AFTER_PERFORM, 'Payme returns the money → the order must not stay paid');
+  const fresh = orders.getOrder(order.id);
+  assert.deepEqual([fresh.status, fresh.payment_status], ['refunded', 'refunded']);
+  assert.equal(stockOf(product), 10, 'stock is returned');
+  assert.deepEqual([row(id).state, row(id).status, row(id).reason], [-2, 'refunded', REASON.EXECUTION_ERROR]);
+  // idempotent, and it can no longer be performed
+  assert.equal((await rpc('CancelTransaction', { id, reason: REASON.EXECUTION_ERROR })).result.state, -2);
+  assert.equal((await rpc('PerformTransaction', { id })).error.code, ERROR.CANNOT_PERFORM);
+
+  // once the order has been shipped the money cannot be taken back (-31007), the order stays paid
+  const shipped = makeOrder({ qty: 1 });
+  const tx2 = await create(shipped.order);
+  orders.markPaid(shipped.order.id, { provider: 'payme', paymentId: row(tx2.id).id, txId: tx2.id, amount: shipped.order.total });
+  orders.setStatus(shipped.order.id, 'shipped');
+  assert.equal((await rpc('CancelTransaction', { id: tx2.id, reason: REASON.REFUND })).error.code, ERROR.CANNOT_CANCEL);
+  assert.equal(orders.getOrder(shipped.order.id).status, 'shipped');
+});
+
+test('PerformTransaction commits "order paid" and "state 2" together', async () => {
+  const { order } = makeOrder({ qty: 1 });
+  const { id } = await create(order);
+  const res = await rpc('PerformTransaction', { id });
+  assert.equal(res.result.state, 2);
+  assert.deepEqual([row(id).state, row(id).status, orders.getOrder(order.id).is_paid], [2, 'paid', true]);
+  assert.equal(res.result.perform_time, row(id).perform_time);
 });
