@@ -19,7 +19,7 @@
     </div>
   </div>
   <div class="pcard__body">
-    <p class="pcard__cat"><%= p.category_title || 'Samo Coffee' %><% if (p.weight_g && p.roast) { %> · <%= p.weight_g %> г<% } %></p>
+    <p class="pcard__cat"><%= p.category_title || settings.site_name %><% if (p.weight_g && p.roast) { %> · <%= p.weight_g %> г<% } %></p>
     <<%= tag %> class="pcard__title"><a class="pcard__link" href="<%= p.url %>"><%= p.title %></a></<%= tag %>>
 <% if (p.subtitle) { -%>
     <p class="pcard__notes"><%= p.subtitle %></p>

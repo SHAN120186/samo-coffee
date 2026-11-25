@@ -7,6 +7,9 @@ import { formatSum } from '../lib/money.js';
 import * as settings from './settings.js';
 import { markTgBlocked } from './tgUsers.js';
 
+/** Payment provider names as the staff sees them in notifications. */
+const PROVIDER_TITLES = { mock: 'демо-оплата', telegram: 'Telegram Payments', payme: 'Payme', click: 'Click', manual: 'отмечен вручную' };
+
 export const ORDER_STATUS_LABELS = {
   new: 'Новый',
   pending_payment: 'Ожидает оплаты',
@@ -105,7 +108,7 @@ export function orderPaid(order) {
     .replaceAll('{number}', order.number)
     .replaceAll('{total}', formatSum(order.total));
   return Promise.all([
-    notifyAdmins(`✅ <b>Оплачен заказ ${escapeTg(order.number)}</b> — ${formatSum(order.total)}\n${escapeTg(order.customer_name)}${order.payment_provider ? ` · ${escapeTg(order.payment_provider)}` : ''}`,
+    notifyAdmins(`✅ <b>Оплачен заказ ${escapeTg(order.number)}</b> — ${formatSum(order.total)}\n${escapeTg(order.customer_name)}${order.payment_provider ? ` · ${escapeTg(PROVIDER_TITLES[order.payment_provider] || order.payment_provider)}` : ''}`,
       linkButton('Открыть в админке', adminOrderUrl(order))),
     order.tg_user_id
       ? notifyTgUser(order.tg_user_id, `✅ ${escapeTg(customerText)}\n\n${itemsLines(order)}\n<b>Итого: ${formatSum(order.total)}</b>`, linkButton('Статус заказа', orderUrl(order)))

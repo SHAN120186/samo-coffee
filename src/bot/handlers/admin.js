@@ -34,7 +34,7 @@ export async function onLastOrders(ctx) {
 }
 
 export async function onAdminHelp(ctx) {
-  await ctx.reply(texts.ADMIN_HELP);
+  await ctx.reply(texts.adminHelp());
 }
 
 /**

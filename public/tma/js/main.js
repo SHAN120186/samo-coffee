@@ -107,7 +107,7 @@ function renderGate(err) {
   setHTML(view, html`<div class="screen">${stateBlock(unauthorized ? {
     iconName: 'telegram',
     title: 'Откройте в Telegram',
-    text: err.message || 'Мини-приложение Samo Coffee работает внутри Telegram.',
+    text: err.message || 'Мини-приложение магазина работает внутри Telegram.',
     actions: html`${botUrl ? html`<a class="btn btn--primary" href="${botUrl}" target="_blank" rel="noopener">Перейти к боту</a>` : ''}<a class="btn btn--ghost" href="/">Открыть сайт</a>`,
   } : {
     iconName: 'alert',
@@ -135,6 +135,7 @@ async function boot() {
 
   try {
     store.boot = await get('/bootstrap');
+    if (store.boot.settings && store.boot.settings.site_name) document.title = store.boot.settings.site_name;
   } catch (err) {
     renderGate(err);
     return;

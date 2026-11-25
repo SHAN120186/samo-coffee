@@ -38,6 +38,9 @@ export default {
     const { boot } = store;
     const t = boot.texts || {};
     const name = boot.user.first_name || '';
+    // shop name from Admin → Настройки: the first word is plain, the rest is set in the accent italic
+    const [brandFirst, ...brandWords] = String(boot.settings.site_name || 'Samo Coffee').trim().split(/\s+/);
+    const brandRest = brandWords.join(' ');
 
     setHTML(ctx.el, html`
       <div class="screen screen--home">
@@ -45,7 +48,7 @@ export default {
           <div class="brand">
             <img class="brand__mark" src="/img/favicon.svg" alt="" width="40" height="40">
             <div style="min-width:0">
-              <div class="brand__name">Samo <em>Coffee</em></div>
+              <div class="brand__name">${brandFirst} <em>${brandRest}</em></div>
               <div class="brand__sub">${name ? `Привет, ${name}!` : boot.settings.site_tagline}</div>
             </div>
           </div>
@@ -60,7 +63,7 @@ export default {
 
         <section class="hero" id="hero">
           ${t.banner_image ? html`<img src="${t.banner_image}" alt="" decoding="async">` : ''}
-          <span class="hero__eyebrow">Samo · Ташкент</span>
+          <span class="hero__eyebrow">${brandFirst} · Ташкент</span>
           <h1 class="hero__title">${t.home_title || 'Свежая обжарка недели'}</h1>
           <p class="hero__text">${t.home_text || ''}</p>
           <button class="hero__cta" type="button" id="hero-cta">Выбрать кофе ${icon('arrow', { size: 14, stroke: 2.2 })}</button>

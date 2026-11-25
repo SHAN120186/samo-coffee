@@ -14,6 +14,7 @@ import { escapeTg, clean, truncate } from '../lib/escape.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { emit } from '../lib/bus.js';
 import * as analytics from './analytics.js';
+import * as settings from './settings.js';
 import { markTgBlocked, tgDisplayName } from './tgUsers.js';
 
 export const FEEDBACK_CHANNELS = ['site', 'bot', 'tma'];
@@ -183,7 +184,7 @@ export async function reply(threadId, p) {
       error = 'Бот не настроен (BOT_TOKEN) — ответ сохранён, но не отправлен.';
     } else {
       try {
-        const sent = await tg.sendMessage(thread.tg_chat_id, `💬 <b>Ответ Samo Coffee</b>\n\n${escapeTg(text)}`);
+        const sent = await tg.sendMessage(thread.tg_chat_id, `💬 <b>Ответ ${escapeTg(settings.get('site_name', 'Samo Coffee'))}</b>\n\n${escapeTg(text)}`);
         run('UPDATE feedback_messages SET delivered = 1, tg_message_id = ? WHERE id = ?', sent?.message_id ?? null, message.id);
         delivered = true;
       } catch (err) {

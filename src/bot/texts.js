@@ -35,8 +35,11 @@ export function welcome(firstName) {
   return e(settings.get('bot_welcome_text')).replaceAll('{name}', e(name));
 }
 
-export const HELP = lines(
-  '<b>Что умеет бот Samo Coffee</b>',
+/** Shop name from Admin → Настройки (so a rebranded shop needs no code changes). */
+const brand = () => e(settings.get('site_name', 'Samo Coffee'));
+
+export const help = () => lines(
+  `<b>Что умеет бот ${brand()}</b>`,
   '',
   '☕ <b>Каталог</b> — зерно, дрип-пакеты и аксессуары, покупка в пару касаний',
   '📦 <b>Мои заказы</b> — статусы и оплата',
@@ -46,8 +49,8 @@ export const HELP = lines(
   'Команды: /catalog · /orders · /subscription · /support · /help',
 );
 
-export const ADMIN_HELP = lines(
-  '<b>Админ-чат Samo Coffee</b>',
+export const adminHelp = () => lines(
+  `<b>Админ-чат ${brand()}</b>`,
   '',
   'Сюда приходят новые заказы, оплаты и обращения клиентов.',
   '↩️ Чтобы ответить клиенту, сделайте <b>reply</b> на его сообщение — ответ уйдёт ему в Telegram и сохранится в админ-панели.',
@@ -63,7 +66,7 @@ export const supportReceived = () => e(settings.get('bot_support_received_text')
 
 export function categoriesText(categories) {
   return lines(
-    '☕ <b>Каталог Samo Coffee</b>',
+    `☕ <b>Каталог ${brand()}</b>`,
     'Обжариваем по средам и пятницам — к вам приедет свежее зерно.',
     '',
     categories.length ? 'Выберите раздел:' : 'Каталог пока пуст — загляните чуть позже.',

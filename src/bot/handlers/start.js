@@ -3,6 +3,7 @@ import { config } from '../../config.js';
 import * as analytics from '../../services/analytics.js';
 import * as customers from '../../services/customers.js';
 import * as orders from '../../services/orders.js';
+import * as settings from '../../services/settings.js';
 import { tgDisplayName } from '../../services/tgUsers.js';
 import { escapeTg } from '../../lib/escape.js';
 import { cb, inline, mainKeyboard, shopButton, shopLabel } from '../keyboards.js';
@@ -26,7 +27,7 @@ export async function sendShopCard(ctx) {
   const text = button
     ? `<b>${escapeTg(shopLabel())}</b>\nВесь каталог, корзина, подписка и история заказов — в мини-приложении, прямо в Telegram.`
     : [
-      '<b>Магазин Samo Coffee</b>',
+      `<b>Магазин ${escapeTg(settings.get('site_name', 'Samo Coffee'))}</b>`,
       'Каталог можно полистать прямо в чате — кнопки ниже.',
       `Мини-приложение откроется кнопкой, когда у сайта будет публичный HTTPS-адрес. Сейчас оно здесь: ${escapeTg(config.tma.url)}`,
     ].join('\n');
@@ -73,7 +74,7 @@ export async function onStart(ctx) {
 }
 
 export async function onHelp(ctx) {
-  await ctx.reply(texts.HELP, { reply_markup: mainKeyboard() });
+  await ctx.reply(texts.help(), { reply_markup: mainKeyboard() });
 }
 
 /** /menu, "Отмена" outside a flow: bring the keyboard back. */
