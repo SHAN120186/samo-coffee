@@ -147,14 +147,23 @@ test('customers: phone normalization and upsert matching', () => {
   assert.equal(customers.normalizePhone('12'), null);
   assert.equal(customers.formatPhone('+998901234567'), '+998 90 123 45 67');
   const a = customers.upsertCustomer({ name: 'Азиз', phone: '90 111 22 33', source: 'site' });
+  // a phone typed by a Telegram user is not verified: it never attaches the account to an existing record
   const b = customers.upsertCustomer({ name: 'Азиз Каримов', phone: '+998901112233', email: 'aziz@example.com', tgUserId: 777, tgUsername: 'aziz' });
-  assert.equal(a.id, b.id);
+  assert.notEqual(a.id, b.id);
   assert.equal(b.name, 'Азиз Каримов');
   assert.equal(b.tg_user_id, 777);
-  assert.equal(customers.upsertCustomer({ tgUserId: 777 }).id, a.id);
-  assert.equal(customers.upsertCustomer({ email: 'AZIZ@example.com' }).id, a.id);
-  assert.equal(customers.listCustomers({ search: 'каримов' }).items[0].id, a.id);
-  assert.equal(customers.listCustomers({ search: '1112233' }).items[0].id, a.id);
+  assert.equal(customers.getCustomer(a.id).tg_user_id, null);
+  assert.equal(customers.upsertCustomer({ tgUserId: 777 }).id, b.id);
+  // anonymous input never matches a Telegram-linked record
+  assert.notEqual(customers.upsertCustomer({ email: 'AZIZ@example.com' }).id, b.id);
+  assert.equal(customers.upsertCustomer({ name: 'Не Азиз', phone: '+998901112233', source: 'site' }).id, a.id);
+  assert.equal(customers.getCustomer(a.id).name, 'Азиз', 'stored contacts are not overwritten by a form');
+  // the verified phone (own Telegram contact) joins the records
+  const joined = customers.linkTelegramAccount({ tgUserId: 777, phone: '+998 90 111 22 33', tgUsername: 'aziz' });
+  assert.equal(joined.id, b.id);
+  assert.equal(customers.getCustomer(a.id), undefined);
+  assert.equal(customers.listCustomers({ search: 'каримов' }).items[0].id, b.id);
+  assert.equal(customers.listCustomers({ search: '1112233' }).items[0].id, b.id);
 });
 
 test('tg users: registration and state', () => {

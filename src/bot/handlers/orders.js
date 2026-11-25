@@ -2,6 +2,7 @@
 // through the deep link https://t.me/<bot>?start=order_SC-100042.
 import * as orders from '../../services/orders.js';
 import * as customers from '../../services/customers.js';
+import { tgDisplayName } from '../../services/tgUsers.js';
 import { cb, inline, mainKeyboard, phoneKeyboard, siteUrl, urlButton } from '../keyboards.js';
 import { normalizeOrderNumber } from '../deeplink.js';
 import { STATES, setState, clearState, getState, patchMemo } from '../state.js';
@@ -113,9 +114,18 @@ export async function onLinkOrderInput(ctx) {
     return true;
   }
   orders.attachTgUser(order.id, ctx.from.id);
-  // Link the Telegram account to the customer who placed the order (matched by phone when this
-  // Telegram user has no customer record yet). The name given at checkout is kept.
-  customers.upsertCustomer({ phone, tgUserId: ctx.from.id, tgUsername: ctx.from.username, source: 'bot' });
+  // The phone is verified (own Telegram contact), so the customer record of the order and this
+  // Telegram account are the same person: join them. A returning user keeps their record and gets
+  // the orders / subscription of the site record; a new user takes the site record over.
+  const customer = customers.linkTelegramAccount({
+    tgUserId: ctx.from.id,
+    tgUsername: ctx.from.username,
+    phone,
+    customerId: order.customer_id,
+    contact: { name: order.customer_name, email: order.customer_email, address: order.delivery_address },
+    name: tgDisplayName(ctx.from),
+  });
+  if (customer) orders.assignCustomer(order.id, customer.id);
   patchMemo(ctx.from.id, { phone });
   const fresh = orders.getOrder(order.id);
   await ctx.reply('Готово, заказ привязан к вашему Telegram ✅ Сообщим здесь, когда статус изменится.', { reply_markup: mainKeyboard() });

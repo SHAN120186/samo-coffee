@@ -255,7 +255,8 @@ Product object = DB columns + `images[]`, `image` (cover), `attributes{}`, `in_s
 |---|---|
 | `customers.normalizePhone(input)` → `'+998901234567'` or `null` | |
 | `customers.formatPhone(phone)` → `'+998 90 123 45 67'`, `customers.isEmail(v)` | |
-| `customers.upsertCustomer({ name, phone, email, tgUserId, tgUsername, address, source })` → customer | match by tgUserId → phone → email |
+| `customers.upsertCustomer({ name, phone, email, tgUserId, tgUsername, address, source })` → customer | with `tgUserId` (authenticated Telegram user): that user's own record, created when missing — never matched by phone/e-mail. Without it (site forms): matched by phone among records **not linked to Telegram**; only empty fields are filled in, stored contacts are never overwritten |
+| `customers.linkTelegramAccount({ tgUserId, phone, tgUsername, customerId, contact, name })` → customer | the **only** way customer records are joined: call it after the phone was verified with the user's own Telegram contact (`contact.user_id === from.id`). Links / merges the unlinked records of that phone (orders, subscriptions, feedback threads) into the Telegram user's record |
 | `customers.getCustomer(id)`, `customers.getCustomerByTgUserId(id)` | |
 | `customers.updateCustomer(id, { name, phone, email, address, notes })` | |
 | `customers.listCustomers({ search, limit = 50, offset = 0 })` → `{ items, total }` | items have `orders_count, paid_total, last_order_at` |

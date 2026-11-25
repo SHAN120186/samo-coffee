@@ -549,3 +549,14 @@ export function attachTgUser(orderId, tgUserId) {
   if (changes > 0) logEvent(Number(orderId), 'note', { note: `Заказ привязан к Telegram (id ${id})`, actor: 'customer' });
   return changes > 0;
 }
+
+/**
+ * Point an order at another customer record. Used after customers.linkTelegramAccount() when the
+ * record the order was created under could not be joined with the Telegram user's record.
+ * @returns {boolean} true when the order was changed
+ */
+export function assignCustomer(orderId, customerId) {
+  if (!customers.getCustomer(customerId)) return false;
+  return run('UPDATE orders SET customer_id = ?, updated_at = ? WHERE id = ? AND customer_id IS NOT ?',
+    Number(customerId), now(), Number(orderId), Number(customerId)).changes > 0;
+}

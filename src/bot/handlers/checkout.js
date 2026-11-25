@@ -113,7 +113,7 @@ export async function startCheckout(ctx, kind, id) {
   }
   await ack(ctx);
   const customer = customers.getCustomerByTgUserId(ctx.from.id);
-  // the memo covers the rare case when the phone belongs to a customer record of another Telegram account
+  // the memo keeps the phone / address of the previous bot order of this Telegram user
   const memo = getMemo(ctx.from.id);
   draft.name = customerName(customer, ctx.from);
   draft.phone = customer?.phone || memo.phone || '';

@@ -1,5 +1,6 @@
-// Customers: one record per person, matched by Telegram id → phone → e-mail.
-import { all, get, run, now } from '../db/index.js';
+// Customers: one record per person. A Telegram id is the only authenticated identity; phones and
+// e-mails typed into forms only group anonymous site orders (see upsertCustomer / linkTelegramAccount).
+import { all, get, run, tx, now } from '../db/index.js';
 import { AppError, notFound } from '../lib/errors.js';
 
 const SOURCES = ['site', 'tma', 'bot', 'admin'];
@@ -40,47 +41,124 @@ export function getCustomerByTgUserId(tgUserId) {
 }
 
 /**
- * Find-or-create a customer and refresh the non-empty fields.
- * Match order: tgUserId → phone → email.
- * @param {{ name?: string, phone?: string, email?: string, tgUserId?: number, tgUsername?: string, address?: string, source?: 'site'|'tma'|'bot'|'admin' }} data
+ * Find-or-create the customer record an order or a visit belongs to.
+ *
+ * Identity rules — a phone or an e-mail typed into a form is NOT proof of identity:
+ *   • tgUserId given (an authenticated Telegram user: bot `from.id`, Mini App initData):
+ *       the row linked to that Telegram id is used and refreshed with the non-empty fields.
+ *       A user without a row gets a NEW one; rows of other people are never matched by phone/e-mail.
+ *   • no tgUserId (site forms — anonymous input): matched by phone among the rows that are NOT
+ *       linked to Telegram (by e-mail only when no phone is given, among rows without a phone).
+ *       A matched row only gets its EMPTY fields filled in — a stored name, e-mail or address is
+ *       never overwritten. Rows linked to a Telegram account are never matched or changed.
+ *
+ * Records of the same person are joined only by linkTelegramAccount(), after the phone is verified.
+ * @param {{ name?: string, phone?: string, email?: string, tgUserId?: number, tgUsername?: string, address?: string,
+ *           source?: 'site'|'tma'|'bot'|'admin' }} data
  * @returns {object} customer row
  */
 export function upsertCustomer(data) {
   const phone = normalizePhone(data.phone);
   const email = isEmail(data.email) ? String(data.email).trim().toLowerCase() : null;
   const tgUserId = data.tgUserId ? Number(data.tgUserId) : null;
-  const name = String(data.name ?? '').trim().slice(0, 120);
+  const name = cleanName(data.name);
+  const address = String(data.address ?? '').trim();
   const source = SOURCES.includes(data.source) ? data.source : 'site';
-
-  let row = null;
-  if (tgUserId) row = getCustomerByTgUserId(tgUserId);
-  if (!row && phone) row = get('SELECT * FROM customers WHERE phone = ? ORDER BY id LIMIT 1', phone);
-  if (!row && email) row = get('SELECT * FROM customers WHERE email = ? ORDER BY id LIMIT 1', email);
-
-  if (!row) {
+  const insert = () => {
     const ts = now();
     const { lastInsertRowid } = run(
       `INSERT INTO customers (name, phone, email, tg_user_id, tg_username, address, source, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      name, phone, email, tgUserId, data.tgUsername || null, String(data.address ?? '').trim(), source, ts, ts,
+      name, phone, email, tgUserId, data.tgUsername || null, address, source, ts, ts,
     );
     return getCustomer(Number(lastInsertRowid));
+  };
+
+  if (tgUserId) {
+    const row = getCustomerByTgUserId(tgUserId);
+    if (!row) return insert();
+    // The Telegram user owns this row: refresh it with what they entered.
+    run(
+      'UPDATE customers SET name = ?, phone = ?, email = ?, tg_username = ?, address = ?, updated_at = ? WHERE id = ?',
+      name || row.name, phone || row.phone, email || row.email, data.tgUsername || row.tg_username, address || row.address, now(), row.id,
+    );
+    return getCustomer(row.id);
   }
 
-  // Attach a Telegram id only when it is free (tg_user_id is UNIQUE).
-  const canSetTg = tgUserId && !row.tg_user_id && !getCustomerByTgUserId(tgUserId);
-  run(
-    `UPDATE customers SET name = ?, phone = ?, email = ?, tg_user_id = ?, tg_username = ?, address = ?, updated_at = ? WHERE id = ?`,
-    name || row.name,
-    phone || row.phone,
-    email || row.email,
-    canSetTg ? tgUserId : row.tg_user_id,
-    data.tgUsername || row.tg_username,
-    String(data.address ?? '').trim() || row.address,
-    now(),
-    row.id,
-  );
+  // Anonymous input: never touches a Telegram-linked record and never overwrites stored contacts.
+  let row = null;
+  if (phone) row = get('SELECT * FROM customers WHERE phone = ? AND tg_user_id IS NULL ORDER BY id LIMIT 1', phone);
+  else if (email) row = get('SELECT * FROM customers WHERE email = ? AND tg_user_id IS NULL AND phone IS NULL ORDER BY id LIMIT 1', email);
+  if (!row) return insert();
+  run('UPDATE customers SET name = ?, email = ?, address = ?, updated_at = ? WHERE id = ?',
+    row.name || name, row.email || email, row.address || address, now(), row.id);
   return getCustomer(row.id);
+}
+
+const cleanName = (value) => String(value ?? '').trim().slice(0, 120);
+
+/**
+ * Join a Telegram account with the customer records of a phone number that was just VERIFIED
+ * (the user shared their own Telegram contact: `contact.user_id === from.id`). This is the only
+ * place where customer records are joined — never call it with a phone that was only typed in.
+ *
+ *   • the Telegram user has no record yet → the record of `customerId` (else the oldest record
+ *     with this phone that has no Telegram account) is linked to the account;
+ *   • the user already has a record → it gets the verified phone;
+ *   • every other record with this phone that has no Telegram account (and `customerId`) is merged
+ *     into the user's record: its orders, subscriptions and feedback threads move over and the
+ *     emptied row is deleted.
+ * Contact details typed into anonymous forms are not trusted: the name / e-mail / address of the
+ * resulting record come from the user's own record or from `contact` (the order that was just
+ * claimed), never from the merged rows. Records of ANOTHER Telegram account are never touched.
+ *
+ * @param {object} p
+ * @param {number} p.tgUserId @param {string} p.phone verified phone
+ * @param {string} [p.tgUsername] @param {number|null} [p.customerId] customer of the claimed order
+ * @param {{ name?: string, email?: string, address?: string }} [p.contact] details of the claimed order
+ * @param {string} [p.name] fallback name (Telegram display name) @param {string} [p.source]
+ * @returns {object|null} the customer row of the Telegram user (null when the input is not valid)
+ */
+export function linkTelegramAccount({ tgUserId, phone, tgUsername = null, customerId = null, contact = {}, name = '', source = 'bot' }) {
+  const id = Number(tgUserId);
+  const verified = normalizePhone(phone);
+  if (!Number.isSafeInteger(id) || id <= 0 || !verified) return null;
+  const claimed = {
+    name: cleanName(contact.name),
+    email: isEmail(contact.email) ? String(contact.email).trim().toLowerCase() : null,
+    address: String(contact.address ?? '').trim(),
+  };
+  return tx(() => {
+    const unlinked = all('SELECT * FROM customers WHERE phone = ? AND tg_user_id IS NULL ORDER BY id', verified);
+    const hinted = customerId ? getCustomer(customerId) : null;
+    if (hinted && !hinted.tg_user_id && !unlinked.some((c) => c.id === hinted.id)) unlinked.unshift(hinted);
+
+    let own = getCustomerByTgUserId(id);
+    if (own) {
+      run('UPDATE customers SET name = ?, phone = ?, email = ?, address = ?, tg_username = ?, updated_at = ? WHERE id = ?',
+        own.name || claimed.name || cleanName(name), verified, own.email || claimed.email, own.address || claimed.address,
+        tgUsername || own.tg_username, now(), own.id);
+    } else {
+      const adopt = (hinted && unlinked.find((c) => c.id === hinted.id)) || unlinked[0];
+      if (!adopt) {
+        return upsertCustomer({ name: claimed.name || name, phone: verified, email: claimed.email, address: claimed.address, tgUserId: id, tgUsername, source });
+      }
+      run('UPDATE customers SET tg_user_id = ?, tg_username = ?, name = ?, phone = ?, email = ?, address = ?, updated_at = ? WHERE id = ?',
+        id, tgUsername || adopt.tg_username, claimed.name || adopt.name || cleanName(name), verified, claimed.email, claimed.address, now(), adopt.id);
+      own = adopt;
+    }
+    for (const other of unlinked) {
+      if (other.id === own.id) continue;
+      for (const table of ['orders', 'subscriptions', 'feedback_threads']) {
+        run(`UPDATE ${table} SET customer_id = ? WHERE customer_id = ?`, own.id, other.id);
+      }
+      if (other.notes) {
+        run(`UPDATE customers SET notes = TRIM(notes || char(10) || ?, char(10)) WHERE id = ?`, other.notes, own.id);
+      }
+      run('DELETE FROM customers WHERE id = ?', other.id);
+    }
+    return getCustomer(own.id);
+  });
 }
 
 /** Admin edit. data: { name, phone, email, address, notes } */
