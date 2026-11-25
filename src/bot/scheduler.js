@@ -50,10 +50,18 @@ async function deliver(userId, html, replyMarkup) {
   }
 }
 
-/** Telegram users we may write to: known to the bot and not blocked. */
-function reachable(userId) {
-  const user = userId ? tgUsers.getTgUser(userId) : null;
-  return user && !user.is_blocked ? user : null;
+/** Telegram users we may write to: known to the bot, not blocked, not a made-up user of the demo seed. */
+const reachable = (userId) => tgUsers.isReachable(userId);
+
+/**
+ * Remember that a notice about this subscription period was sent. The marks of the user's OTHER
+ * subscriptions are kept (the memo patch replaces the whole map, so it is merged here); marks of
+ * periods that ended long ago are dropped.
+ */
+function remember(userId, key, sub, now) {
+  const marks = Object.entries(getMemo(userId)[key] || {})
+    .filter(([, end]) => now - Date.parse(end) <= EXPIRED_NOTICE_WINDOW + DAY);
+  patchMemo(userId, { [key]: { ...Object.fromEntries(marks), [sub.id]: sub.current_period_end } });
 }
 
 /**
@@ -86,7 +94,7 @@ export async function tick({ now = Date.now(), force = false } = {}) {
         ],
       });
       // remembered even when the user blocked the bot: there is nobody to remind
-      patchMemo(userId, { subReminded: { [sub.id]: sub.current_period_end } });
+      remember(userId, 'subReminded', sub, now);
       return delivered;
     });
     result.reminded = reminders.sent;
@@ -102,7 +110,7 @@ export async function tick({ now = Date.now(), force = false } = {}) {
       if (getMemo(userId).subExpired?.[sub.id] === sub.current_period_end) return false;
       if (subscriptions.getCurrentForTgUser(userId)) {
         // the customer already has another subscription — nothing to announce
-        patchMemo(userId, { subExpired: { [sub.id]: sub.current_period_end } });
+        remember(userId, 'subExpired', sub, now);
         return false;
       }
       const delivered = await deliver(userId, texts.subscriptionExpired(sub), {
@@ -111,7 +119,7 @@ export async function tick({ now = Date.now(), force = false } = {}) {
           [{ text: 'Все планы', callback_data: 'plans!' }],
         ],
       });
-      patchMemo(userId, { subExpired: { [sub.id]: sub.current_period_end } });
+      remember(userId, 'subExpired', sub, now);
       return delivered;
     });
     result.expiredNotified = notices.sent;

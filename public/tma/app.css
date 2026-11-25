@@ -394,6 +394,8 @@ body.no-tabs .mainbar { bottom: 0; padding-bottom: calc(14px + var(--safe-b)); }
 .fcard__foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.grid-more { margin-top: 14px; }
+.grid-more .btn { width: 100%; }
 .pcard { display: flex; flex-direction: column; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 20px; padding: 8px 8px 12px; min-width: 0; }
 .pcard__media { position: relative; display: block; aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: var(--tile); }
 .pcard__media img { width: 100%; height: 100%; object-fit: cover; transition: transform 400ms var(--ease-out); }

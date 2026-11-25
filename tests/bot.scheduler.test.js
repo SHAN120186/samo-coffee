@@ -114,6 +114,42 @@ test('an ended subscription is marked expired and the customer is told once', as
   assert.equal(fake.calls.length, 0);
 });
 
+test('two subscriptions of one customer that expired within days of each other are announced once each', async () => {
+  // a short plan: expire → subscribe again → expire again inside the 3-day notice window
+  const { user, sub } = await subscriber(6010, -2 * 3_600_000);
+  await tick({ force: true });
+  assert.equal(subscriptions.getSubscription(sub.id).status, 'expired');
+  const again = orders.createSubscriptionOrder({ planId: plan.id, customer: { name: 'Подписчик', phone: '+998900006010' }, channel: 'bot', tgUserId: user.id });
+  orders.markPaid(again.id, { provider: 'mock', amount: again.total });
+  await notify.flush();
+  const second = subscriptions.getCurrentForTgUser(user.id);
+  assert.notEqual(second.id, sub.id);
+  run('UPDATE subscriptions SET current_period_end = ? WHERE id = ?', new Date(Date.now() - 3_600_000).toISOString(), second.id);
+
+  fake.reset();
+  const first = await tick({ force: true });
+  assert.equal(first.expiredNotified, 1, 'the second expiry is announced');
+  const memo = tgUsers.getTgUser(user.id).state_data._memo.subExpired;
+  assert.deepEqual(Object.keys(memo).sort(), [String(sub.id), String(second.id)].sort(), 'both marks are kept');
+
+  // every later pass is silent — no "подписка закончилась" twice an hour for three days
+  for (let i = 0; i < 3; i += 1) {
+    fake.reset();
+    const next = await tick({ force: true });
+    assert.equal(next.expiredNotified, 0, `pass ${i + 2}`);
+    assert.equal(callsToChat(fake, 'sendMessage', user.id).length, 0);
+  }
+
+  // marks of periods that ended long ago are dropped, the fresh ones stay
+  const row = tgUsers.getTgUser(user.id);
+  tgUsers.setTgState(user.id, row.state, { ...row.state_data, _memo: { ...row.state_data._memo, subExpired: { ...memo, 999999: new Date(Date.now() - 30 * DAY).toISOString() } } });
+  run('UPDATE subscriptions SET current_period_end = ? WHERE id = ?', new Date(Date.now() - 1_800_000).toISOString(), second.id);
+  await tick({ force: true });
+  const pruned = tgUsers.getTgUser(user.id).state_data._memo.subExpired;
+  assert.equal(pruned['999999'], undefined);
+  assert.ok(pruned[String(sub.id)] && pruned[String(second.id)]);
+});
+
 test('users who blocked the bot are skipped and marked; flood limits do not lose the reminder', async () => {
   const blocked = await subscriber(6004, 1.5 * DAY);
   const limited = await subscriber(6005, 1.5 * DAY);

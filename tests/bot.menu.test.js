@@ -16,6 +16,8 @@ import * as orders from '../src/services/orders.js';
 import * as cart from '../src/services/cart.js';
 import * as tgUsers from '../src/services/tgUsers.js';
 import * as notify from '../src/services/notify.js';
+import * as feedback from '../src/services/feedback.js';
+import { getState, FLOW_TTL_MS } from '../src/bot/state.js';
 
 let fake;
 let bot;
@@ -165,7 +167,12 @@ test('buying a product: phone → delivery → address → confirmation → orde
   assert.match(askPhone.text, /Оставьте номер телефона/);
   assert.equal(askPhone.reply_markup.keyboard[0][0].request_contact, true);
 
+  // something that is not an attempt to type a number is a message for the team — it is passed on,
+  // not answered with "cannot parse the number" (see the support tests); a wrong number is
   await send(message(user, 'не номер'));
+  assert.match(lastText(fake, user.id).text, /Передали ваше сообщение команде/);
+  assert.equal(lastText(fake, user.id).reply_markup.keyboard[0][0].request_contact, true, 'the phone keyboard stays');
+  await send(message(user, '+998 90 12'));
   assert.match(lastText(fake, user.id).text, /Не получилось разобрать номер/);
 
   fake.reset();
@@ -461,4 +468,123 @@ test('messages in unrelated group chats are ignored', async () => {
   await send({ update_id: 3, message: { message_id: 2, date: 1, chat, from: user, text: 'привет' } });
   assert.equal(fake.calls.length, 0);
   assert.equal(tgUsers.getTgUser(user.id), null);
+});
+
+test('"Продлить" pressed again and again offers the same unpaid renewal instead of creating new orders', async () => {
+  const user = makeUser(7020);
+  await send(message(user, '/start'));
+  const first = orders.createSubscriptionOrder({
+    planId: plan.id, customer: { name: 'Подписчик', phone: '+998 94 700 20 20' }, delivery: { method: 'courier', address: 'Ташкент, Юнусабад, 4' },
+    channel: 'bot', tgUserId: user.id,
+  });
+  orders.markPaid(first.id, { provider: 'mock', amount: first.total });
+  await notify.flush();
+
+  fake.reset();
+  await send(callback(user, 'renew!'));
+  await send(callback(user, 'renew!'));
+  await send(callback(user, 'renew'));
+  const renewals = orders.listForTgUser(user.id).filter((o) => o.id !== first.id);
+  assert.equal(renewals.length, 1, 'one renewal order however many times the button is pressed');
+  assert.equal(renewals[0].can_pay, true);
+  assert.equal(callsToChat(fake, 'sendMessage', ADMIN_CHAT_ID).filter((p) => /Новый заказ/.test(p.text)).length, 1, 'the staff hears about it once');
+  const offers = callsToChat(fake, 'sendMessage', user.id).filter((p) => p.text.includes(renewals[0].number));
+  assert.equal(offers.length, 3, 'every tap shows the way to pay that order');
+
+  // once it is paid, the next "Продлить" is a new period → a new order
+  orders.markPaid(renewals[0].id, { provider: 'mock', amount: renewals[0].total });
+  await notify.flush();
+  await send(callback(user, 'renew'));
+  assert.equal(orders.listForTgUser(user.id).length, 3);
+
+  // a cancelled renewal is not offered again either
+  const [open] = orders.listForTgUser(user.id);
+  orders.cancel(open.id, { actor: 'customer' });
+  await send(callback(user, 'renew'));
+  assert.equal(orders.listForTgUser(user.id).length, 4);
+});
+
+test('an abandoned checkout or phone confirmation expires: later messages go to support, not into the order', async () => {
+  const user = makeUser(7021);
+  const [product] = shop.products;
+  const age = (ms) => {
+    const row = tgUsers.getTgUser(user.id);
+    tgUsers.setTgState(user.id, row.state, { ...row.state_data, _at: Date.now() - ms });
+  };
+  const threads = () => feedback.listThreads({ tgUserId: user.id }).total;
+
+  // address step, left for a week
+  await send(callback(user, `buy:${product.id}`));
+  await send(message(user, '+998 90 702 10 21'));
+  await send(callback(user, 'co:courier'));
+  assert.equal(getState(user.id).data.step, 'address');
+  assert.ok(getState(user.id).at > 0, 'the state remembers when it was last touched');
+  age(7 * 86_400_000);
+  fake.reset();
+  await send(message(user, 'Здравствуйте! Когда будет новая обжарка Эфиопии?'));
+  assert.equal(tgUsers.getTgUser(user.id).state, '', 'the stale checkout is gone');
+  assert.equal(threads(), 1, 'the question became a support request');
+  assert.ok(callsToChat(fake, 'sendMessage', ADMIN_CHAT_ID).some((p) => p.text.includes('Когда будет новая обжарка Эфиопии?')), 'forwarded to the team');
+  assert.ok(!callsToChat(fake, 'sendMessage', user.id).some((p) => /Проверьте заказ/.test(p.text)), 'not taken for a delivery address');
+  assert.equal(orders.listForTgUser(user.id).length, 0);
+
+  // a stale button of that checkout no longer places anything
+  await send(callback(user, `buy:${product.id}`));
+  await send(message(user, '+998 90 702 10 21'));
+  await send(callback(user, 'co:pickup'));
+  assert.equal(getState(user.id).data.step, 'confirm');
+  age(FLOW_TTL_MS + 60_000);
+  fake.reset();
+  await send(callback(user, 'co:ok'));
+  assert.match(fake.callsTo('answerCallbackQuery')[0].text, /неактуален/);
+  assert.equal(orders.listForTgUser(user.id).length, 0);
+
+  // a flow that is still fresh keeps working (the timer restarts with every step)…
+  await send(callback(user, `buy:${product.id}`));
+  await send(message(user, '+998 90 702 10 21'));
+  age(FLOW_TTL_MS - 60_000);
+  await send(callback(user, 'co:pickup'));
+  assert.equal(getState(user.id).data.step, 'confirm');
+  assert.ok(Date.now() - getState(user.id).at < 5000);
+  // …and a question typed in the middle of it reaches the team while the order stays open
+  fake.reset();
+  await send(message(user, 'А можно оплатить при получении?'));
+  assert.equal(threads(), 1);
+  assert.equal(feedback.listThreads({ tgUserId: user.id }).items[0].messages_count, 2);
+  assert.ok(callsToChat(fake, 'sendMessage', ADMIN_CHAT_ID).some((p) => p.text.includes('оплатить при получении')));
+  assert.equal(getState(user.id).state, 'checkout');
+  await send(callback(user, 'co:cancel'));
+
+  // phone step of a new user: the reply keyboard has no "Поддержка" button — a question must not be lost
+  const newcomer = makeUser(7022);
+  await send(callback(newcomer, `buy:${product.id}`));
+  assert.equal(getState(newcomer.id).data.step, 'phone');
+  fake.reset();
+  await send(message(newcomer, 'зачем вам мой номер?'));
+  assert.equal(feedback.listThreads({ tgUserId: newcomer.id }).total, 1);
+  assert.ok(callsToChat(fake, 'sendMessage', ADMIN_CHAT_ID).some((p) => p.text.includes('зачем вам мой номер?')));
+  assert.equal(getState(newcomer.id).state, 'checkout', 'the order still waits for the phone');
+  // …and after a month of silence the next message is just a message
+  const row = tgUsers.getTgUser(newcomer.id);
+  tgUsers.setTgState(newcomer.id, row.state, { ...row.state_data, _at: Date.now() - 30 * 86_400_000 });
+  fake.reset();
+  await send(message(newcomer, 'Добрый день'));
+  assert.equal(getState(newcomer.id).state, '');
+  assert.ok(!callsToChat(fake, 'sendMessage', newcomer.id).some((p) => /разобрать номер/.test(p.text)));
+
+  // link_order (phone confirmation of a site order) expires the same way
+  const ref = { token: cart.newToken() };
+  cart.addItem(ref, product.id, 1);
+  const siteOrder = orders.createFromCart(ref, { customer: { name: 'Сайт', phone: '+998 93 702 10 23' }, delivery: { method: 'pickup' } });
+  await notify.flush();
+  const linker = makeUser(7023);
+  await send(message(linker, `/start order_${siteOrder.number}`));
+  assert.equal(getState(linker.id).state, 'link_order');
+  const linkRow = tgUsers.getTgUser(linker.id);
+  tgUsers.setTgState(linker.id, linkRow.state, { ...linkRow.state_data, _at: Date.now() - FLOW_TTL_MS - 1000 });
+  fake.reset();
+  await send(message(linker, 'Подскажите, до скольки вы работаете?'));
+  assert.equal(getState(linker.id).state, '');
+  assert.equal(feedback.listThreads({ tgUserId: linker.id }).total, 1);
+  assert.ok(!callsToChat(fake, 'sendMessage', linker.id).some((p) => /Отправить мой номер/.test(p.text)));
 });

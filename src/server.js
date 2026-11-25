@@ -5,6 +5,7 @@ import { createApp } from './app.js';
 import { stopBot } from './bot/index.js';
 import * as subscriptions from './services/subscriptions.js';
 import * as notify from './services/notify.js';
+import * as broadcasts from './services/broadcasts.js';
 import { activeProviderId, resolveProvider } from './payments/index.js';
 
 // Opt-in demo data for a first deploy (SEED_ON_EMPTY=1): only when the database holds no business
@@ -37,6 +38,12 @@ function paymentStatus() {
 const server = app.listen(config.port, config.host, () => {
   console.log(`[samo] ${config.env} · ${config.baseUrl} (listening on ${config.host}:${config.port})`);
   console.log(`[samo] payments: ${paymentStatus()} · bot: ${config.bot.enabled ? `${config.bot.mode}` : 'disabled (no BOT_TOKEN)'} · db: ${config.databasePath} · uploads: ${config.uploads.dir}`);
+  // A broadcast that was being sent when the previous process stopped continues where it stopped.
+  try {
+    broadcasts.resumeInterrupted();
+  } catch (err) {
+    console.error('[broadcast] resume failed:', err);
+  }
 });
 
 // Housekeeping: expire subscriptions whose period has ended.
@@ -60,6 +67,8 @@ async function shutdown(signal) {
   force.unref();
   clearInterval(timer);
   try {
+    // running broadcasts stop after the current recipient; their progress is saved, the next boot resumes them
+    await broadcasts.stopSending();
     await stopBot();
   } catch (err) {
     console.error('[bot] stop failed:', err);

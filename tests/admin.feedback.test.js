@@ -212,6 +212,49 @@ test('broadcast: validation, draft, sending to every active bot user with stored
   assert.equal((await c.postForm('/admin/broadcasts/999999/send', {})).status, 404);
 });
 
+test('broadcast: unbalanced markup is refused; a stopped broadcast shows the reason and can be continued', async () => {
+  const unclosed = await c.postForm('/admin/broadcasts', { text: '<b>Скидка 20%', action: 'draft' });
+  assert.equal(unclosed.status, 422);
+  assert.match(unclosed.text, /не закрыт/);
+  const crossed = await c.postForm('/admin/broadcasts', { text: '<b><i>Скидка</b></i>', action: 'send' });
+  assert.equal(crossed.status, 422);
+  const before = broadcasts.listBroadcasts().length;
+  assert.equal((await c.postForm('/admin/broadcasts', { text: '<b>Скидка</b> <i>20%</i>', action: 'draft' })).status, 302);
+  assert.equal(broadcasts.listBroadcasts().length, before + 1);
+
+  // Telegram refuses the message for a reason that is the same for everybody (here: the button URL)
+  fake.on('sendMessage', (p) => (p.text === 'Акция выходного дня' ? { error_code: 400, description: 'Bad Request: BUTTON_URL_INVALID' } : { message_id: 1 }));
+  await c.postForm('/admin/broadcasts', { text: 'Акция выходного дня', button_text: 'Открыть', button_url: 'https://samo.coffee/x', action: 'send' });
+  const id = broadcasts.listBroadcasts()[0].id;
+  const stopped = await waitFor(() => {
+    const b = broadcasts.getBroadcast(id);
+    return b.status === 'failed' ? b : null;
+  });
+  assert.deepEqual([stopped.sent, stopped.failed], [0, 0]);
+  assert.match(stopped.error, /BUTTON_URL_INVALID/);
+  assert.equal(fake.callsTo('sendMessage').filter((p) => p.text === 'Акция выходного дня').length, 1, 'stopped at the first recipient');
+
+  const page = await c.get('/admin/broadcasts');
+  assert.match(page.text, /Остановлена/);
+  assert.ok(page.text.includes('BUTTON_URL_INVALID'), 'the reason is shown');
+  assert.match(page.text, /Продолжить/);
+  assert.ok(page.text.includes('data-sending="0"'), 'the page does not poll for a broadcast nobody is sending');
+  const status = (await c.get('/admin/broadcasts/status.json')).json().items.find((b) => b.id === id);
+  assert.deepEqual([status.status, status.error.includes('BUTTON_URL_INVALID')], ['failed', true]);
+
+  // the cause is gone (e.g. Telegram is back): "Продолжить" finishes the send
+  fake.off('sendMessage');
+  const resume = await c.postForm(`/admin/broadcasts/${id}/send`, {});
+  assert.equal(resume.status, 302);
+  const done = await waitFor(() => {
+    const b = broadcasts.getBroadcast(id);
+    return b.status === 'done' ? b : null;
+  });
+  assert.equal(done.sent, done.total);
+  assert.equal(done.error, '');
+  assert.ok(!(await c.get('/admin/broadcasts')).text.includes('BUTTON_URL_INVALID'));
+});
+
 test('order actions in the panel notify the customer through the bot', async () => {
   const buyer = { id: 555777, first_name: 'Покупатель' };
   tgUsers.upsertTgUser(buyer, { chatId: buyer.id, source: 'tma' });

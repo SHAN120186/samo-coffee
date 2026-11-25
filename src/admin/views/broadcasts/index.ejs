@@ -73,6 +73,7 @@
                 <% } else { %>
                   <div class="progress"><span data-progress style="width: <%= b.total ? Math.round((done / b.total) * 100) : 100 %>%"></span></div>
                   <span class="t-sub" data-progress-label><%= b.sent %> из <%= b.total %><%= b.failed ? ` · ошибок: ${b.failed}` : '' %></span>
+                  <% if (b.status === 'failed' && b.error) { %><span class="t-sub" data-broadcast-error><%= b.error %></span><% } %>
                 <% } %>
               </td>
               <td class="t-nowrap"><%= formatDateTime(b.created_at) %></td>
@@ -80,6 +81,10 @@
                 <% if (b.status === 'draft') { %>
                   <form method="post" action="/admin/broadcasts/<%= b.id %>/send" data-confirm="Отправить черновик №<%= b.id %> всем пользователям бота (<%= formatNumber(audience.active) %>)?" data-confirm-ok="Отправить" data-confirm-tone="primary">
                     <%- csrfField %><button class="btn btn--sm" type="submit"<%= botEnabled ? '' : ' disabled' %>><%- icon('send', 14) %> Отправить</button>
+                  </form>
+                <% } else if (canResume(b)) { %>
+                  <form method="post" action="/admin/broadcasts/<%= b.id %>/send" data-confirm="Продолжить рассылку №<%= b.id %>? Сообщение получат только те, кому оно ещё не отправлялось." data-confirm-ok="Продолжить" data-confirm-tone="primary">
+                    <%- csrfField %><button class="btn btn--sm" type="submit"<%= botEnabled ? '' : ' disabled' %>><%- icon('send', 14) %> Продолжить</button>
                   </form>
                 <% } %>
               </td>

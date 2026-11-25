@@ -18,6 +18,9 @@ function validate(data) {
   if (!data.text) fields.text = 'Напишите текст рассылки';
   else if (/[<>]/.test(data.text.replace(TG_TAGS, ''))) {
     fields.text = 'В тексте есть неподдерживаемые теги. Разрешены: <b>, <i>, <u>, <s>, <a href="…">, <code>';
+  } else if (broadcasts.htmlProblem(data.text)) {
+    // an unclosed tag would be refused by Telegram for every single recipient
+    fields.text = broadcasts.htmlProblem(data.text);
   }
   if (data.image && !/^https:\/\/\S+$/.test(data.image)) fields.image = 'Нужна публичная ссылка на картинку, начинающаяся с https://';
   if (data.image && data.text.length > 1000) fields.text = 'С картинкой текст должен быть не длиннее 1000 символов';
@@ -38,7 +41,10 @@ function render(req, res, { status = 200, form = null, fields = {}, error = null
     audience: tgUsers.countTgUsers(),
     botEnabled: tg.isConfigured(),
     botUsername: config.bot.username,
-    sending: history.some((b) => b.status === 'sending'),
+    // poll for progress only while THIS process is really sending something
+    sending: history.some((b) => broadcasts.isSending(b.id)),
+    /** stopped or interrupted broadcasts that can be continued from the last recipient */
+    canResume: (b) => b.status !== 'draft' && broadcasts.canSend(b),
     form: form || { text: '', image: '', button_text: '', button_url: '' },
     fields,
     error,
@@ -53,6 +59,7 @@ router.get('/status.json', (req, res) => {
     ok: true,
     items: broadcasts.listBroadcasts(30).map((b) => ({
       id: b.id, status: b.status, status_label: broadcasts.BROADCAST_STATUS_LABELS[b.status] || b.status, total: b.total, sent: b.sent, failed: b.failed,
+      error: b.error || '',
     })),
   });
 });
@@ -99,11 +106,13 @@ router.post('/:id/send', (req, res, next) => {
   if (!broadcast) return next(notFound('Рассылка'));
   if (!tg.isConfigured()) {
     req.flash('error', 'Бот не подключён (BOT_TOKEN не задан) — отправка недоступна');
-  } else if (broadcast.status !== 'draft') {
-    req.flash('error', 'Эта рассылка уже отправлялась');
+  } else if (!broadcasts.canSend(broadcast)) {
+    req.flash('error', broadcasts.isSending(broadcast.id) ? 'Эта рассылка уже отправляется' : 'Эта рассылка уже отправлялась');
   } else {
+    // a draft starts from the first recipient; a stopped / interrupted one continues where it stopped
+    const resumed = broadcast.status !== 'draft';
     start(req, broadcast);
-    req.flash('success', `Рассылка #${broadcast.id} запущена`);
+    req.flash('success', resumed ? `Рассылка #${broadcast.id} продолжена с того места, где остановилась` : `Рассылка #${broadcast.id} запущена`);
   }
   return res.redirect('/admin/broadcasts');
 });

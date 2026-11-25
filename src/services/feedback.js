@@ -4,7 +4,10 @@
 //   incoming message  → stored (direction 'in') → forwarded to ADMIN_CHAT_ID; the id of that admin-chat
 //                       message is saved in feedback_messages.admin_chat_message_id
 //   admin answers     → from the panel (reply(threadId, { adminId })) or by REPLYING to the forwarded
-//                       message in the admin chat (bot: findThreadByAdminMessageId(reply_to.message_id) → reply())
+//                       message in the admin chat (bot: findThreadByAdminMessageId(reply_to.message_id) → reply());
+//                       the id of the staff answer is stored the same way, so a follow-up written as a
+//                       reply to one's own answer (or to the bot's "✅ Ответ доставлен · обращение #N")
+//                       reaches the same thread
 //   reply()           → stored (direction 'out') → delivered to the user through the bot when the thread
 //                       has tg_chat_id (bot / Mini App threads); site threads are answered by e-mail/phone manually
 import { all, get, run, tx, now } from '../db/index.js';
@@ -203,6 +206,17 @@ export async function reply(threadId, p) {
 /** Remember which admin-chat message represents a stored message (reply mapping). */
 export function setAdminMessageId(messageId, adminChatMessageId) {
   run('UPDATE feedback_messages SET admin_chat_message_id = ? WHERE id = ?', Number(adminChatMessageId), Number(messageId));
+}
+
+/**
+ * The stored message that a message of the admin chat stands for: the forwarded customer message
+ * (direction 'in') or a staff answer written in the chat (direction 'out'), with its thread.
+ * @returns {{ thread: object, message: object } | null}
+ */
+export function findMessageByAdminMessageId(adminChatMessageId) {
+  const message = get('SELECT * FROM feedback_messages WHERE admin_chat_message_id = ? ORDER BY id DESC LIMIT 1', Number(adminChatMessageId));
+  const thread = message ? getThreadRow(message.thread_id) : null;
+  return thread ? { thread, message } : null;
 }
 
 /** Thread whose forwarded notification has this message id in the admin chat, or null. */

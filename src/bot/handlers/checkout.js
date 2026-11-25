@@ -14,6 +14,7 @@ import * as subscriptions from '../../services/subscriptions.js';
 import * as analytics from '../../services/analytics.js';
 import { tgDisplayName } from '../../services/tgUsers.js';
 import { AppError } from '../../lib/errors.js';
+import { RateLimiter } from '../../lib/ratelimit.js';
 import { clean, escapeTg, truncate } from '../../lib/escape.js';
 import { formatSum } from '../../lib/money.js';
 import { cb, inline, mainKeyboard, phoneKeyboard } from '../keyboards.js';
@@ -21,7 +22,12 @@ import { parseStartParam } from '../deeplink.js';
 import { STATES, setState, clearState, getState, getMemo, patchMemo } from '../state.js';
 import { ack, show, dropButtons } from '../ui.js';
 import { sendPayment } from './payments.js';
+import { onCustomerMessage } from './support.js';
 import * as texts from '../texts.js';
+
+/** One user cannot flood the shop (and the admin chat) with orders: 10 per 10 minutes, like the Mini App. */
+export const orderLimiter = new RateLimiter({ windowMs: 10 * 60_000, max: 10 });
+const ORDER_LIMIT_TEXT = 'Слишком много заказов подряд. Попробуйте через несколько минут.';
 
 /** The bot keeps its own one-item cart per user, so the Mini App cart of the same user is left alone. */
 const cartRef = (userId) => ({ token: `bot:${userId}` });
@@ -204,6 +210,10 @@ export async function onCheckoutAction(ctx, action, arg) {
 /** Create the order and ask for the payment. */
 async function placeOrder(ctx, draft, item) {
   const userId = ctx.from.id;
+  if (!orderLimiter.hit(String(userId)).allowed) {
+    await ack(ctx, ORDER_LIMIT_TEXT, { alert: true });
+    return;
+  }
   const input = {
     customer: { name: draft.name, phone: draft.phone },
     delivery: { method: draft.method, address: draft.address },
@@ -270,6 +280,13 @@ export async function onCheckoutInput(ctx) {
     }
     const phone = parsePhone(message.contact?.phone_number ?? message.text);
     if (!phone) {
+      if (!message.contact && !looksLikePhone(message.text)) {
+        // Not an attempt to type a number ("зачем вам мой номер?", a photo…): the team gets the
+        // message like any other, and the order keeps waiting for the phone.
+        await onCustomerMessage(ctx);
+        await ctx.reply('Передали ваше сообщение команде — ответим здесь. Чтобы продолжить заказ, отправьте номер телефона кнопкой ниже или напишите его, а если передумали — нажмите «✖️ Отмена».', { reply_markup: phoneKeyboard() });
+        return true;
+      }
       await ctx.reply('Не получилось разобрать номер. Напишите его в формате +998 90 123 45 67 или нажмите кнопку ниже.', { reply_markup: phoneKeyboard() });
       return true;
     }
@@ -291,11 +308,16 @@ export async function onCheckoutInput(ctx) {
   }
 
   if (typeof message.text === 'string') {
-    await ctx.reply('Чтобы продолжить заказ, нажмите кнопку под сообщением выше. Если появился вопрос — «💬 Поддержка» в меню.');
+    // a question in the middle of the checkout is not lost: the team gets it, the order stays open
+    await onCustomerMessage(ctx);
+    await ctx.reply('Передали ваше сообщение команде. Чтобы продолжить заказ, нажмите кнопку под сообщением с заказом выше — или «✖️ Отмена», если передумали.');
     return true;
   }
   return false;
 }
+
+/** Does the text look like somebody tried to type a phone number (at least 5 digits)? */
+const looksLikePhone = (text) => typeof text === 'string' && text.replace(/\D/g, '').length >= 5;
 
 /**
  * "Продлить": a new period for the current plan with the delivery details we already have.
@@ -313,6 +335,20 @@ export async function renewSubscription(ctx) {
   }
   if (!customer?.phone) {
     await startCheckout(ctx, 'plan', plan.id);
+    return true;
+  }
+  // A renewal that is still waiting for the payment is offered again instead of creating one more
+  // order (and one more "Новый заказ" for the staff) on every tap of the button.
+  const pending = orders.listForTgUser(userId, 30)
+    .find((o) => o.kind === 'subscription' && o.plan_id === plan.id && o.can_pay && o.total === plan.price);
+  if (pending) {
+    await ack(ctx);
+    clearState(userId);
+    await sendPayment(ctx, pending);
+    return true;
+  }
+  if (!orderLimiter.hit(String(userId)).allowed) {
+    await ack(ctx, ORDER_LIMIT_TEXT, { alert: true });
     return true;
   }
   await ack(ctx);

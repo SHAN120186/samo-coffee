@@ -9,6 +9,7 @@ import { STATES, setState, clearState, getState, patchMemo } from '../state.js';
 import { ack, show } from '../ui.js';
 import { sendPayment } from './payments.js';
 import { parsePhone } from './checkout.js';
+import { onCustomerMessage } from './support.js';
 import * as texts from '../texts.js';
 
 const LIST_LIMIT = 8;
@@ -99,6 +100,8 @@ export async function onLinkOrderInput(ctx) {
   const contact = ctx.message.contact;
   if (!contact) {
     if (typeof ctx.message.text !== 'string') return false;
+    // a question instead of the contact is passed to the team (a typed number is not: it proves nothing)
+    if (ctx.message.text.replace(/\D/g, '').length < 5) await onCustomerMessage(ctx);
     await ctx.reply('Чтобы подтвердить, что заказ ваш, нажмите «📱 Отправить мой номер» — так Telegram передаст именно ваш номер. Или нажмите «✖️ Отмена».', { reply_markup: phoneKeyboard() });
     return true;
   }

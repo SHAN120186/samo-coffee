@@ -364,7 +364,7 @@ Actors: `'system'`, `'customer'`, `'admin:<id>'`, `'provider:<id>'`.
 | `async receiveFromTelegram({ tgUser, chatId, text, tgMessageId, channel = 'bot', notify = true })` → `{ thread, message, isNew }` | bot support mode: appends to the user's latest non-closed thread or opens one |
 | `async reply(threadId, { text, adminId, via: 'panel'|'telegram' })` → `{ message, delivered, deliverable, error? }` | stores the answer; delivers via the bot when the thread has `tg_chat_id` |
 | `setAdminMessageId(messageId, adminChatMessageId)` | when the bot forwards the original message itself (`notify: false`) |
-| `findThreadByAdminMessageId(adminChatMessageId)` → thread or `null` | map an admin-chat reply to its thread |
+| `findThreadByAdminMessageId(adminChatMessageId)` → thread or `null`, `findMessageByAdminMessageId(id)` → `{ thread, message }` or `null` | map an admin-chat reply to its thread (forwarded customer message or a stored staff answer) |
 | `getThread(id)` → thread + `messages[]` | messages have `admin_name` |
 | `listThreads({ status, channel, search, tgUserId, limit = 50, offset })` → `{ items, total }` | items: `last_text, last_direction, messages_count, channel_label, status_label, can_deliver` |
 | `listForTgUser(tgUserId, limit = 10)` | threads with messages |
@@ -656,12 +656,19 @@ rich text fields), `escapeHtml`, `escapeTg` (Telegram HTML), `slugify` / `unique
 - Messages use `parse_mode: 'HTML'`; escape user text with `escapeTg()`.
 - Private chat id == Telegram user id; `orders.tg_user_id` / `feedback_threads.tg_chat_id` are where
   notifications and replies go.
-- Bot state machine lives in `tg_users.state` (`''` idle, `'support'` feedback mode) via `tgUsers.setTgState`.
+- Bot state machine lives in `tg_users.state` (`''` idle, `'support'` feedback mode, `'checkout'`,
+  `'link_order'`) via `tgUsers.setTgState` (`src/bot/state.js`). A checkout / phone confirmation that
+  nobody touched for 45 minutes expires (`expireStaleFlow`), so an abandoned flow never swallows later
+  messages; a question typed in the middle of a flow is passed to support, not taken for input.
 - **Feedback flow**: user message in support mode → `feedback.receiveFromTelegram({ tgUser, text, tgMessageId })`
   (stores + forwards to `ADMIN_CHAT_ID`, remembers the forwarded message id) → admin **replies to that
   message** in the admin chat → bot: `feedback.findThreadByAdminMessageId(msg.reply_to_message.message_id)`
   → `feedback.reply(thread.id, { text, via: 'telegram' })` → the user receives the answer. Replies from the
   admin panel use the same `feedback.reply(..., { adminId, via: 'panel' })`.
+  Follow-ups: the id of a staff answer is stored too (`feedback.setAdminMessageId`), so a reply to one's
+  **own** answer, or to the bot's confirmation "✅ Ответ доставлен · обращение #N", reaches the same
+  thread. A reply to a colleague's answer is staff talk and goes nowhere; a reply to a bot message that
+  belongs to no thread gets a hint in a staff group (in the owner's private chat it is a normal customer message).
 - **Deep links**: `/start <param>` → `tgUsers.upsertTgUser(user, { startParam })` + `trackEvent('bot_start', { channel: 'bot', tgUserId, meta: { start_param } })`.
 - **Mini App auth** (`lib/initData.js`): the client sends `Authorization: tma <Telegram.WebApp.initData>`.
   Server: `resolveTmaUser(req)` → `{ user, dev, startParam }` or `{ user: null, reason }`.

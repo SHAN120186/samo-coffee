@@ -372,3 +372,39 @@ test('mutating endpoints are rate limited per Telegram user', async () => {
   await other.post('/cart/items', { productId: scarce.id });
   assert.equal((await other.post('/checkout', { ...CHECKOUT, delivery: { method: 'pickup' } })).status, 201);
 });
+
+test('a catalog longer than one page is reachable: the client pages through /products with offset', async () => {
+  // the paging code of the Mini App itself (public/tma/js/paging.js), driven against the real API
+  const { listQuery, hasMore, appendPage } = await import('../public/tma/js/paging.js');
+  const big = makeCatalog(70, { stock: 3 });
+  const api = tmaClient(t.baseUrl, tgUser());
+  const params = { category: big.category.slug, search: '', sort: '' };
+
+  const first = await api.get(`/products?${listQuery(params)}`);
+  assert.deepEqual([first.body.items.length, first.body.total, first.body.limit, first.body.offset], [60, 70, 60, 0]);
+  const list = { items: first.body.items, total: first.body.total };
+  assert.equal(hasMore(list), true, 'the grid offers "Показать ещё"');
+
+  let requests = 0;
+  while (hasMore(list) && requests < 5) {
+    const query = listQuery(params, list.items.length);
+    assert.match(query, /offset=\d+/);
+    appendPage(list, (await api.get(`/products?${query}`)).body);
+    requests += 1;
+  }
+  assert.equal(requests, 1);
+  assert.equal(list.items.length, 70);
+  assert.deepEqual(list.items.map((p) => p.id).sort((a, b) => a - b), big.products.map((p) => p.id).sort((a, b) => a - b), 'every product of the category was loaded exactly once');
+  assert.equal(hasMore(list), false);
+
+  // the whole catalog ("Все") pages the same way
+  const all70 = await api.get('/products');
+  assert.ok(all70.body.total >= 73);
+  assert.equal(all70.body.items.length, 60);
+
+  // a page that brings nothing new ends the list (no endless "show more"), duplicates are dropped
+  const stuck = { items: [{ id: 1 }, { id: 2 }], total: 5 };
+  appendPage(stuck, { items: [{ id: 2 }], total: 5 });
+  assert.deepEqual([stuck.items.length, hasMore(stuck)], [2, false]);
+  assert.equal(listQuery({ category: '', search: '', sort: '', featured: true, limit: 8 }), 'featured=1&limit=8');
+});

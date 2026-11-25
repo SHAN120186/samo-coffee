@@ -1,6 +1,6 @@
 // Home: brand header, search, banner, category chips, featured row, product grid.
 import { tg } from '../tg.js';
-import { store, loadProducts, peekProducts } from '../store.js';
+import { store, loadProducts, loadMoreProducts, peekProducts } from '../store.js';
 import { html, setHTML, icon, productCard, productGridSkeleton, priceBlock } from '../ui.js';
 import { quickAdd } from '../actions.js';
 
@@ -87,6 +87,7 @@ export default {
             </select>
           </div>
           <div class="grid2" id="grid">${productGridSkeleton(6)}</div>
+          <div class="grid-more" id="more" hidden></div>
         </section>
       </div>`);
 
@@ -98,19 +99,58 @@ export default {
       const category = boot.categories.find((c) => c.slug === state.category);
       $('#catalog-title').textContent = state.search ? 'Результаты' : category ? category.title : 'Каталог';
       if (!data.items.length) {
+        $('#more').hidden = true;
         grid.style.display = 'block';
         setHTML(grid, html`<div class="empty"><b>Ничего не нашли</b>${state.search ? 'Попробуйте другой запрос или посмотрите весь каталог.' : 'В этой категории пока пусто — загляните позже.'}</div>`);
         return;
       }
       grid.style.display = '';
       setHTML(grid, html`${data.items.map(productCard)}`);
+      renderMore(data);
     };
+
+    // The API gives 60 products per request: the rest of a long list is loaded page by page —
+    // by the button, and by itself when the button scrolls into view.
+    let moreObserver = null;
+    const loadMore = async () => {
+      const mine = request;
+      const button = $('#grid-more');
+      if (!button || button.disabled) return;
+      button.disabled = true;
+      button.textContent = 'Загружаем…';
+      try {
+        const data = await loadMoreProducts(listParams());
+        if (ctx.alive && mine === request) renderGrid(data);
+      } catch (err) {
+        if (!ctx.alive || mine !== request) return;
+        button.disabled = false;
+        button.textContent = 'Не получилось — повторить';
+      }
+    };
+    const renderMore = (data) => {
+      if (moreObserver) moreObserver.disconnect();
+      const more = $('#more');
+      const left = data.total - data.items.length;
+      more.hidden = left <= 0;
+      if (left <= 0) return setHTML(more, '');
+      setHTML(more, html`<button class="btn btn--soft" type="button" id="grid-more">Показать ещё · осталось ${left}</button>`);
+      $('#grid-more').addEventListener('click', loadMore);
+      if ('IntersectionObserver' in window) {
+        moreObserver = new IntersectionObserver((entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) loadMore();
+        }, { rootMargin: '300px' });
+        moreObserver.observe($('#grid-more'));
+      }
+      return null;
+    };
+    ctx.onCleanup(() => moreObserver && moreObserver.disconnect());
 
     const loadGrid = async () => {
       const mine = ++request;
       const cached = peekProducts(listParams());
       if (cached) return renderGrid(cached);
       grid.style.display = '';
+      $('#more').hidden = true;
       setHTML(grid, productGridSkeleton(4));
       try {
         const data = await loadProducts(listParams());

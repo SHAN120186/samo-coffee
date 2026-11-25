@@ -1,5 +1,6 @@
 // App state shared by the screens: bootstrap data, cart summary, small caches.
 import { get, post, put, del } from './api.js';
+import { listQuery, hasMore, appendPage } from './paging.js';
 
 const listeners = new Map();
 
@@ -59,11 +60,12 @@ export async function setCartQty(productId, qty) {
   return cart;
 }
 
-/** Product list with a tiny in-memory cache (chips and back navigation feel instant). */
+/**
+ * Product list with a tiny in-memory cache (chips and back navigation feel instant).
+ * Returns the first page ({ items, total }); loadMoreProducts() appends the following ones.
+ */
 export async function loadProducts(params = {}) {
-  const query = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) if (v !== '' && v !== undefined && v !== null && v !== false) query.set(k, v === true ? '1' : String(v));
-  const key = query.toString();
+  const key = listQuery(params);
   if (store.lists.has(key)) return store.lists.get(key);
   const data = await get(`/products${key ? `?${key}` : ''}`);
   if (store.lists.size > 40) store.lists.clear();
@@ -71,11 +73,24 @@ export async function loadProducts(params = {}) {
   return store.lists.get(key);
 }
 
-export const peekProducts = (params = {}) => {
-  const query = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) if (v !== '' && v !== undefined && v !== null && v !== false) query.set(k, v === true ? '1' : String(v));
-  return store.lists.get(query.toString()) || null;
-};
+export const peekProducts = (params = {}) => store.lists.get(listQuery(params)) || null;
+
+/**
+ * Load the next page of a list (the API returns at most 60 products per request) and append it to
+ * the cached list. Resolves with the list; does nothing when everything is loaded.
+ */
+export async function loadMoreProducts(params = {}) {
+  const list = await loadProducts(params);
+  if (!hasMore(list)) return list;
+  // one request at a time per list: a second call waits for the first
+  if (!list.pending) {
+    list.pending = get(`/products?${listQuery(params, list.items.length)}`)
+      .then((page) => appendPage(list, page))
+      .finally(() => { list.pending = null; });
+  }
+  await list.pending;
+  return list;
+}
 
 export async function loadPlans({ fresh = false } = {}) {
   if (!store.plans || fresh) {

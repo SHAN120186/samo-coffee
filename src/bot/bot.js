@@ -16,7 +16,7 @@ import { escapeTg } from '../lib/escape.js';
 import * as tgUsers from '../services/tgUsers.js';
 import { installTransformers, isBlockedError } from './api.js';
 import { menuAction, mainKeyboard } from './keyboards.js';
-import { STATES, getState, clearState } from './state.js';
+import { STATES, getState, clearState, expireStaleFlow } from './state.js';
 import { ack } from './ui.js';
 import { onStart, onHelp, onMenu, sendShopCard } from './handlers/start.js';
 import { showCategories, showCategory, showProduct } from './handlers/catalog.js';
@@ -151,6 +151,8 @@ export function createBot({ botInfo } = {}) {
     const { user, isNew } = tgUsers.upsertTgUser(ctx.from, { chatId: ctx.chat.id, startParam, source: 'bot' });
     ctx.tgUser = user;
     ctx.isNewUser = isNew;
+    // a checkout / phone confirmation abandoned long ago must not capture this message or button
+    expireStaleFlow(ctx.from.id);
     try {
       await next();
     } catch (err) {

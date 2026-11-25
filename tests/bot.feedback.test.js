@@ -5,6 +5,7 @@ import { startFakeTelegram } from './helpers/fakeTelegram.js';
 import { makeCatalog, CUSTOMER, DELIVERY } from './helpers/fixtures.js';
 import { BOT_INFO, STAFF, makeUser, message, groupMessage, callsToChat, lastText, buttonData } from './bot.helpers.js';
 import { createBot } from '../src/bot/bot.js';
+import { config } from '../src/config.js';
 import { supportLimiter } from '../src/bot/handlers/support.js';
 import * as feedback from '../src/services/feedback.js';
 import * as auth from '../src/services/auth.js';
@@ -22,8 +23,8 @@ const send = async (update) => {
   await notify.flush();
 };
 /** The message the bot put into the admin chat for the latest customer message (with its fake message_id). */
-function trackAdminMessages() {
-  let id = 880000;
+function trackAdminMessages(base = 880000) {
+  let id = base;
   const sent = [];
   const record = (method) => (p) => {
     id += 1;
@@ -187,6 +188,95 @@ test('an admin answers by replying in the admin chat: the customer gets the answ
   const [copied] = callsToChat(fake, 'copyMessage', user.id);
   assert.equal(copied.message_id, photoAnswer.message.message_id);
   assert.equal(String(copied.from_chat_id), String(ADMIN_CHAT_ID));
+});
+
+test('follow-up answers: a reply to the bot\'s confirmation or to one\'s own answer reaches the same customer', async () => {
+  const user = makeUser(8201);
+  const adminMessages = trackAdminMessages(885000); // message ids of a chat are unique: do not reuse the ids of the earlier tests
+  const groupChat = { id: Number(ADMIN_CHAT_ID), type: 'supergroup' };
+  await send(message(user, 'Где мой заказ?'));
+  const [thread] = feedback.listThreads({ tgUserId: user.id }).items;
+  const forwardedId = adminMessages.at(-1).message_id;
+
+  const first = groupMessage(STAFF, 'Уже в пути!', { reply_to_message: { message_id: forwardedId, date: 1, chat: groupChat, from: BOT_INFO, text: 'Обращение' } });
+  await send(first);
+  const confirmation = adminMessages.at(-1);
+  assert.match(confirmation.params.text, new RegExp(`Ответ доставлен · обращение #${thread.id}`));
+  const toCustomer = () => callsToChat(fake, 'sendMessage', user.id).map((p) => p.text);
+
+  // 1. a reply to the confirmation "✅ Ответ доставлен · обращение #N"
+  fake.calls.length = 0;
+  await send(groupMessage(STAFF, 'Курьер позвонит за час', {
+    reply_to_message: { message_id: confirmation.message_id, date: 1, chat: groupChat, from: BOT_INFO, text: confirmation.params.text },
+  }));
+  assert.ok(toCustomer().some((text) => text.includes('Курьер позвонит за час')), 'delivered to the customer');
+  assert.match(lastText(fake, ADMIN_CHAT_ID).text, new RegExp(`Ответ доставлен · обращение #${thread.id}`));
+
+  // 2. a reply to one's own previous answer
+  fake.calls.length = 0;
+  await send(groupMessage(STAFF, 'И привезёт дрип-пакеты в подарок', {
+    reply_to_message: { message_id: first.message.message_id, date: 1, chat: groupChat, from: STAFF, text: 'Уже в пути!' },
+  }));
+  assert.ok(toCustomer().some((text) => text.includes('дрип-пакеты в подарок')));
+  assert.deepEqual(feedback.getThread(thread.id).messages.map((m) => [m.direction, m.text]), [
+    ['in', 'Где мой заказ?'], ['out', 'Уже в пути!'], ['out', 'Курьер позвонит за час'], ['out', 'И привезёт дрип-пакеты в подарок'],
+  ]);
+
+  // 3. a colleague replies to that answer: staff talk — nothing is sent to the customer, nothing stored
+  fake.calls.length = 0;
+  const colleague = { id: 555002, is_bot: false, first_name: 'Тимур' };
+  await send(groupMessage(colleague, 'А дрипы точно есть на складе?', {
+    reply_to_message: { message_id: first.message.message_id, date: 1, chat: groupChat, from: STAFF, text: 'Уже в пути!' },
+  }));
+  assert.equal(fake.calls.length, 0);
+  assert.equal(feedback.getThread(thread.id).messages.length, 4);
+
+  // 4. a reply to a bot message that belongs to no thread (an order notification): a hint, not silence
+  fake.calls.length = 0;
+  await send(groupMessage(STAFF, 'Кто соберёт?', {
+    reply_to_message: { message_id: 990001, date: 1, chat: groupChat, from: BOT_INFO, text: '🧾 Новый заказ SC-100001' },
+  }));
+  assert.equal(callsToChat(fake, 'sendMessage', user.id).length, 0);
+  assert.match(lastText(fake, ADMIN_CHAT_ID).text, /ответ никому не отправлен/);
+  assert.equal(feedback.listThreads({ tgUserId: user.id }).total, 1);
+
+  // 5. nobody but the bot can author a "обращение #N" message that maps to a thread
+  fake.calls.length = 0;
+  await send(groupMessage(colleague, 'проверка', {
+    reply_to_message: { message_id: 990002, date: 1, chat: groupChat, from: STAFF, text: `Ответ доставлен · обращение #${thread.id}` },
+  }));
+  assert.equal(fake.calls.length, 0);
+});
+
+test('ADMIN_CHAT_ID = the owner\'s private chat: a follow-up is delivered, it does not become a ticket from the owner', async () => {
+  const owner = makeUser(555900, { first_name: 'Владелец', last_name: '' });
+  const previous = config.bot.adminChatId;
+  config.bot.adminChatId = String(owner.id);
+  try {
+    const user = makeUser(8301);
+    const adminMessages = [];
+    let id = 886000;
+    fake.on('sendMessage', (p) => {
+      id += 1;
+      if (String(p.chat_id) === String(owner.id)) adminMessages.push({ message_id: id, params: p });
+      return { message_id: id, date: 1, chat: { id: Number(p.chat_id), type: 'private' }, text: p.text };
+    });
+    const ownerChat = { id: owner.id, type: 'private' };
+    await send(message(user, 'Есть ли у вас дрипы без кофеина?'));
+    const [thread] = feedback.listThreads({ tgUserId: user.id }).items;
+    await send(message(owner, 'Да, есть!', { reply_to_message: { message_id: adminMessages.at(-1).message_id, date: 1, chat: ownerChat, from: BOT_INFO, text: 'Обращение' } }));
+    const confirmation = adminMessages.at(-1);
+    assert.match(confirmation.params.text, /Ответ доставлен/);
+
+    fake.calls.length = 0;
+    await send(message(owner, 'Привезём завтра', { reply_to_message: { message_id: confirmation.message_id, date: 1, chat: ownerChat, from: BOT_INFO, text: confirmation.params.text } }));
+    assert.ok(callsToChat(fake, 'sendMessage', user.id).some((p) => p.text.includes('Привезём завтра')), 'the customer got the follow-up');
+    assert.equal(feedback.listThreads({ tgUserId: owner.id }).total, 0, 'no ticket was opened from the owner');
+    assert.ok(!callsToChat(fake, 'sendMessage', owner.id).some((p) => /Передали сообщение команде/.test(p.text)));
+    assert.equal(feedback.getThread(thread.id).messages.filter((m) => m.direction === 'out').length, 2);
+  } finally {
+    config.bot.adminChatId = previous;
+  }
 });
 
 test('a reply from the admin panel reaches the customer through the bot', async () => {
