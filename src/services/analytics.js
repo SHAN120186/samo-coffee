@@ -170,6 +170,16 @@ export function pageViewMiddleware({ exclude = [] } = {}) {
  * @param {{ channel?: 'site'|'tma'|'bot'|'admin', sessionId?: string, tgUserId?: number, productId?: number, orderId?: number, value?: number, meta?: object, at?: string }} [data]
  *   For Telegram channels without a cookie session pass tgUserId — the session becomes "tg:<id>".
  */
+/**
+ * Delete raw page views older than `days` (config.analytics.retentionDays by default).
+ * Orders, events and aggregates are untouched. Returns the number of deleted rows.
+ */
+export function pruneOldPageViews(days = config.analytics.retentionDays) {
+  if (!days || days <= 0) return 0;
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+  return Number(run('DELETE FROM page_views WHERE created_at < ?', cutoff).changes || 0);
+}
+
 export function trackEvent(name, data = {}) {
   if (!config.analytics.enabled) return;
   try {

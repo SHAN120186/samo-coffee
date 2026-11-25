@@ -59,6 +59,16 @@ if (typeof process.getuid === 'function' && process.getuid() === 0) {
       console.warn(`[start] cannot drop privileges (${err.message}) — staying root`);
     }
   }
+
+} else {
+  try {
+    fs.mkdirSync(dataDir, { recursive: true });
+    fs.accessSync(dataDir, fs.constants.W_OK);
+  } catch (err) {
+    console.error(`[start] ${dataDir} is not writable for uid ${process.getuid?.()} (${err.code || err.message}). ` +
+      'The container was started as a non-root user, so it cannot fix the volume permissions itself: ' +
+      'start it as root (it drops privileges on its own) or make the volume writable for this user.');
+  }
 }
 
 await import('../src/server.js');

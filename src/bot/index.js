@@ -137,11 +137,30 @@ async function registerWebhook(rt) {
     warn(`[bot] webhook mode: BASE_URL is not https, so the webhook is not registered automatically. Point Telegram to <public https address>${config.bot.webhookPath} yourself or use BOT_MODE=polling.`);
     return;
   }
-  try {
+  const attempt = async () => {
     await rt.bot.api.setWebhook(url, { secret_token: webhookSecret(), allowed_updates: ALLOWED_UPDATES, max_connections: 10 });
     log(`[bot] @${rt.bot.botInfo.username} is running (webhook ${url})`);
+  };
+  try {
+    await attempt();
   } catch (err) {
     console.error(`[bot] setWebhook failed: ${err.description || err.message}`);
+    if (err.error_code === 401) return; // token revoked — retrying cannot help
+    // keep trying in the background so a temporary Telegram outage does not leave the bot deaf until a restart
+    (async () => {
+      let delay = 5_000;
+      while (!rt.stopped) {
+        if (!(await pause(delay, rt.abort.signal))) return;
+        try {
+          await attempt();
+          return;
+        } catch (e) {
+          if (rt.stopped || e.error_code === 401) return;
+          console.error(`[bot] setWebhook retry failed: ${e.description || e.message}`);
+          delay = Math.min(delay * 2, 300_000);
+        }
+      }
+    })().catch((e) => console.error('[bot] webhook retry crashed:', e));
   }
 }
 

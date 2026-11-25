@@ -161,6 +161,8 @@ export const config = {
 
   analytics: {
     enabled: bool('ANALYTICS_ENABLED', true),
+    /** Page views older than this many days are deleted by the hourly housekeeping (0 = keep forever). */
+    retentionDays: Math.max(0, Math.floor(Number(process.env.ANALYTICS_RETENTION_DAYS ?? 400)) || 0),
   },
 };
 

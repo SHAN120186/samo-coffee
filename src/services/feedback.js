@@ -57,6 +57,21 @@ async function forwardToAdmins(thread, message) {
   return sent;
 }
 
+/**
+ * Forward without making the customer wait longer than FORWARD_WAIT_MS: a slow or hanging Telegram
+ * keeps going in the background (the reply mapping is still saved when it answers).
+ */
+const FORWARD_WAIT_MS = 1500;
+function forwardInBackground(thread, message) {
+  const task = forwardToAdmins(thread, message).catch((err) => {
+    console.error('[feedback] admin notification failed:', err.message || err);
+    return null;
+  });
+  let timer;
+  const wait = new Promise((resolve) => { timer = setTimeout(resolve, FORWARD_WAIT_MS, null); });
+  return Promise.race([task, wait]).finally(() => clearTimeout(timer));
+}
+
 function insertMessage(threadId, { direction, text, adminId = null, via = '', tgMessageId = null }) {
   const ts = now();
   const { lastInsertRowid } = run(
@@ -106,7 +121,7 @@ export async function createThread(p) {
     return { thread: getThreadRow(id), message: msg };
   });
   analytics.trackEvent('feedback', { channel, sessionId: p.sessionId, tgUserId: p.tgUserId, meta: { thread_id: thread.id } });
-  if (p.notify !== false) await forwardToAdmins(thread, message);
+  if (p.notify !== false) await forwardInBackground(thread, message);
   emit('feedback.thread', { thread, message });
   emit('feedback.message', { thread, message });
   return { thread: getThreadRow(thread.id), message: get('SELECT * FROM feedback_messages WHERE id = ?', message.id) };
@@ -123,7 +138,7 @@ export async function addIncoming(threadId, p) {
   if (!thread) throw notFound('Обращение');
   const message = insertMessage(thread.id, { direction: 'in', text: normalizeText(p.text), tgMessageId: p.tgMessageId ?? null });
   const fresh = getThreadRow(thread.id);
-  if (p.notify !== false) await forwardToAdmins(fresh, message);
+  if (p.notify !== false) await forwardInBackground(fresh, message);
   emit('feedback.message', { thread: fresh, message });
   return get('SELECT * FROM feedback_messages WHERE id = ?', message.id);
 }

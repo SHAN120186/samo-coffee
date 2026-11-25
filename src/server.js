@@ -6,6 +6,7 @@ import { stopBot } from './bot/index.js';
 import * as subscriptions from './services/subscriptions.js';
 import * as notify from './services/notify.js';
 import * as broadcasts from './services/broadcasts.js';
+import { pruneOldPageViews } from './services/analytics.js';
 import { activeProviderId, resolveProvider } from './payments/index.js';
 
 // Opt-in demo data for a first deploy (SEED_ON_EMPTY=1): only when the database holds no business
@@ -46,12 +47,18 @@ const server = app.listen(config.port, config.host, () => {
   }
 });
 
-// Housekeeping: expire subscriptions whose period has ended.
+// Housekeeping: expire subscriptions whose period has ended; drop raw page views past the retention window.
 const housekeeping = () => {
   try {
     subscriptions.expireDue();
   } catch (err) {
     console.error('[housekeeping]', err);
+  }
+  try {
+    const removed = pruneOldPageViews();
+    if (removed) console.log(`[housekeeping] removed ${removed} page views older than ${config.analytics.retentionDays} days`);
+  } catch (err) {
+    console.error('[housekeeping] page view pruning failed:', err);
   }
 };
 housekeeping();

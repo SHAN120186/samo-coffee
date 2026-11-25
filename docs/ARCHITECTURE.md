@@ -51,9 +51,8 @@ tests/<module>-*.test.js each module adds its own files
 Rules: edit only the files your module owns. Route files contain **no SQL** — call services. If a
 service function is genuinely missing, **add** one (never rename/rewrite existing ones) and report it.
 
-Module entry files currently ship as working **stubs**; builders replace them:
-`src/site/routes.js` (+ `views/stub.ejs`), `src/admin/routes.js` (+ `views/stub.ejs`),
-`src/tma/api.js`, `public/tma/index.html`, `src/bot/index.js`.
+Module entry points: `src/site/routes.js`, `src/admin/routes.js`, `src/tma/api.js` (+ the SPA in
+`public/tma/`), `src/payments/routes.js`, `src/bot/index.js`. All of them are fully implemented.
 
 ---
 

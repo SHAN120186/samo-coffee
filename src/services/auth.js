@@ -57,6 +57,10 @@ export function ensureDefaultAdmin() {
     console.warn('[auth] no admins exist and ADMIN_PASSWORD is empty — set it and restart to create the first admin');
     return null;
   }
+  if (String(config.admin.password).length < MIN_PASSWORD_LENGTH) {
+    console.error(`[auth] ADMIN_PASSWORD is shorter than ${MIN_PASSWORD_LENGTH} characters — the first admin was NOT created. Set a longer password and restart.`);
+    return null;
+  }
   const { lastInsertRowid } = run('INSERT INTO admins (email, name, password_hash, role) VALUES (?, ?, ?, ?)',
     config.admin.email, 'Администратор', hashPassword(config.admin.password), 'owner');
   return getAdmin(Number(lastInsertRowid));
