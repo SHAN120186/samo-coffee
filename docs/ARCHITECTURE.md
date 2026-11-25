@@ -722,7 +722,7 @@ uploads { dir, maxBytes }, analytics { enabled }`.
 | `BASE_URL` | `http://localhost:$PORT` | no trailing slash; https in production |
 | `DATABASE_PATH` | `./data/samo.db` | `:memory:` supported |
 | `SESSION_SECRET` | dev default | 16+ chars in production |
-| `TRUST_PROXY` | `1` in production | |
+| `TRUST_PROXY` | `1` on Railway, otherwise empty (X-Forwarded-For ignored) | set `1` only when the app is reachable through your reverse proxy alone (docker-compose.yml does) |
 | `TZ_OFFSET_MINUTES` | `300` | |
 | `ANALYTICS_ENABLED` | `1` | |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_SESSION_DAYS` | `admin@samo.coffee`, `admin12345` (dev only), `14` | first admin is created when the table is empty |

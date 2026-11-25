@@ -200,6 +200,51 @@ test('login is rate limited per account', async () => {
   assert.equal((await login(t.newClient())).status, 302);
 });
 
+test('password guessing is limited per account from ANY address; a known browser is not locked out', async () => {
+  auth.createAdmin({ email: 'target@samo.coffee', password: 'correct-horse-battery', role: 'manager' });
+  // every guess comes from another address, so the IP-keyed limits never trigger
+  for (let i = 0; i < 20; i += 1) {
+    assert.deepEqual(auth.login('target@samo.coffee', `guess-${i}`, { ip: `203.0.113.${i}` }), { ok: false, reason: 'invalid' }, `attempt ${i + 1}`);
+  }
+  const blocked = auth.login('Target@Samo.Coffee ', 'correct-horse-battery', { ip: '198.51.100.7' });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.reason, 'rate_limited');
+  assert.ok(blocked.retryAfterSec > 0);
+  // ...also over HTTP, whatever X-Forwarded-For says (it is not trusted here)
+  const c = t.newClient();
+  await c.get('/admin/login');
+  const viaHttp = await c.postForm('/admin/login', { email: 'target@samo.coffee', password: 'correct-horse-battery' }, { headers: { 'x-forwarded-for': '192.0.2.55' } });
+  assert.equal(viaHttp.status, 429);
+  // a cookie of another account does not help
+  assert.equal(auth.login('target@samo.coffee', 'correct-horse-battery', { ip: '198.51.100.8', knownAccount: 'someone@samo.coffee' }).reason, 'rate_limited');
+  // the browser that logged into this account before still gets in (and still needs the password)
+  assert.equal(auth.login('target@samo.coffee', 'nope', { ip: '198.51.100.9', knownAccount: 'target@samo.coffee' }).reason, 'invalid');
+  assert.equal(auth.login('target@samo.coffee', 'correct-horse-battery', { ip: '198.51.100.9', knownAccount: 'target@samo.coffee' }).ok, true);
+  // unknown e-mails are counted the same way (no account enumeration through the limiter)
+  for (let i = 0; i < 20; i += 1) auth.login('ghost@samo.coffee', 'x', { ip: `203.0.113.${100 + i}` });
+  assert.equal(auth.login('ghost@samo.coffee', 'x', { ip: '198.51.100.10' }).reason, 'rate_limited');
+
+  // a successful login marks the browser as known for that account (signed cookie, panel only)
+  const owner = t.newClient();
+  const ok = await login(owner);
+  assert.equal(ok.status, 302);
+  const deviceCookie = (ok.headers.getSetCookie?.() || []).find((line) => line.startsWith(`${auth.DEVICE_COOKIE}=`));
+  assert.ok(deviceCookie, 'device cookie is set');
+  assert.match(deviceCookie, /HttpOnly/i);
+  assert.match(deviceCookie, /Path=\/admin/);
+});
+
+test('X-Forwarded-For does not let a client escape the login limits when no proxy is trusted', async () => {
+  const c = t.newClient();
+  await c.get('/admin/login');
+  const statuses = [];
+  for (let i = 0; i < 10; i += 1) {
+    const res = await c.postForm('/admin/login', { email: 'spoof@samo.coffee', password: `guess-${i}` }, { headers: { 'x-forwarded-for': `10.9.8.${i}` } });
+    statuses.push(res.status);
+  }
+  assert.deepEqual(statuses, [401, 401, 401, 401, 401, 401, 401, 401, 429, 429]);
+});
+
 test('roles: a manager cannot open settings, broadcasts or admin management', async () => {
   auth.createAdmin({ email: 'manager@samo.coffee', password: 'manager-password', name: 'Менеджер', role: 'manager' });
   const c = t.newClient();

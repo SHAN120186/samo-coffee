@@ -179,6 +179,12 @@ test('payments registry helpers', () => {
   assert.equal(safeReturnUrl('//evil.example/', order), 'http://localhost:3000/order/abc');
   assert.equal(safeReturnUrl('/\\evil.example', order), 'http://localhost:3000/order/abc');
   assert.equal(safeReturnUrl(undefined, order), 'http://localhost:3000/order/abc');
+  // values a browser would normalise into another origin ("//evil.example/") are refused as well
+  for (const bad of ['/.//evil.example/', '/..//evil.example/', '/a/..//evil.example', '/./\\evil.example', 'http://localhost:3000/.//evil.example/',
+    'http://localhost:3000@evil.example/', 'http://localhost:3000.evil.example/', '/x\ty', '/a\r\nb']) {
+    assert.equal(safeReturnUrl(bad, order), 'http://localhost:3000/order/abc', bad);
+  }
+  assert.equal(safeReturnUrl('/a/../order/zzz?x=1', order), 'http://localhost:3000/order/zzz?x=1', 'the re-serialised URL is returned');
   assert.equal(invoicePayload(42), 'order:42');
   assert.equal(parseInvoicePayload('order:42'), 42);
   assert.equal(parseInvoicePayload('order:42; DROP'), null);

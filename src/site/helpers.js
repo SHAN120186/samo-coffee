@@ -1,6 +1,7 @@
 // View helpers of the public site: icons, SEO meta, pagination, small text utilities.
 import { config } from '../config.js';
 import { escapeHtml, stripTags, truncate } from '../lib/escape.js';
+import { localPath } from '../lib/redirects.js';
 
 // ─────────────────────────────── icons (inline SVG, 24×24, stroke = currentColor)
 
@@ -127,10 +128,12 @@ export function withQuery(basePath, params) {
   return s ? `${basePath}?${s}` : basePath;
 }
 
-/** Same-site path only (open-redirect protection for "return to" form fields). */
+/**
+ * Same-site path only (open-redirect protection for "return to" form fields). The value is resolved
+ * like a browser does it, so "/.//evil.example" (→ "//evil.example") is refused as well.
+ */
 export function safeLocalPath(candidate, fallback = '/') {
-  const c = String(candidate || '');
-  return /^\/(?![/\\])/.test(c) && !/[\r\n]/.test(c) && c.length <= 500 ? c : fallback;
+  return localPath(candidate) || fallback;
 }
 
 /** Tasting notes for the home page ticker, taken from coffee products ("Жасмин, бергамот, персик"). */

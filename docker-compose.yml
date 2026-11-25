@@ -16,8 +16,15 @@ services:
       # the paths inside the container are fixed by DATA_DIR; ignore local-development values from .env
       DATABASE_PATH: ""
       UPLOAD_DIR: ""
+      # The app is reached through the reverse proxy on this host (see "Обратный прокси и HTTPS" in
+      # the README), so its X-Forwarded-For is trusted. Set TRUST_PROXY=0 in .env if you publish the
+      # port to the internet directly (not recommended).
+      TRUST_PROXY: ${TRUST_PROXY:-1}
     ports:
-      - "3000:3000"
+      # Loopback only: the container must not be reachable past the proxy — a direct client could
+      # send its own X-Forwarded-For and bypass the rate limits. To expose it directly, change this
+      # to "3000:3000" AND set TRUST_PROXY=0.
+      - "127.0.0.1:3000:3000"
     volumes:
       # one volume keeps the SQLite database (/data/samo.db) and the uploaded media (/data/uploads)
       - samo-data:/data

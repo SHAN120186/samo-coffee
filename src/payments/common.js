@@ -2,6 +2,7 @@
 // providers never import the registry — no import cycles).
 import crypto from 'node:crypto';
 import { config } from '../config.js';
+import { resolveSameOrigin } from '../lib/redirects.js';
 import * as orders from '../services/orders.js';
 import * as paymentsRepo from '../services/payments.js';
 
@@ -18,11 +19,16 @@ export const providerReturnUrl = (order) => `${config.baseUrl}/pay/return/${orde
 /**
  * Validate a user-supplied return URL (open-redirect protection): only same-site paths
  * ("/tma/#/orders/5") or absolute URLs under BASE_URL are accepted; anything else → order status page.
+ * The value is resolved like a browser would do it (dot segments, backslashes), so "/.//evil.example/"
+ * cannot smuggle a protocol-relative target; the returned URL is the re-serialised one.
  */
 export function safeReturnUrl(candidate, order) {
   const c = String(candidate || '');
-  if (/^\/(?![/\\])/.test(c) && !/[\r\n]/.test(c)) return `${config.baseUrl}${c}`;
-  if (c.startsWith(`${config.baseUrl}/`) && !/[\r\n]/.test(c)) return c;
+  const absolute = c.startsWith('/') ? `${config.baseUrl}${c}` : c;
+  if (absolute.startsWith(`${config.baseUrl}/`)) {
+    const url = resolveSameOrigin(absolute, `${config.baseUrl}/`);
+    if (url) return url.href;
+  }
   return orderStatusUrl(order);
 }
 

@@ -1,6 +1,7 @@
 import './helpers/env.js';
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import { startTestApp } from './helpers/http.js';
 import { seed } from '../src/db/seed.js';
 import { get, all } from '../src/db/index.js';
@@ -269,6 +270,22 @@ test('routing hygiene: trailing slashes, cache headers, branded error pages', as
   assert.equal((await t.client.get('/about/')).location, '/about');
   assert.notEqual((await t.client.get('/tma/')).status, 301, 'other modules are left alone');
 
+  // the normaliser never emits a protocol-relative Location (open redirect): the path is sent as is,
+  // the way a browser does it
+  const rawGet = (rawPath) => new Promise((resolve, reject) => {
+    const u = new URL(t.baseUrl);
+    http.get({ host: u.hostname, port: u.port, path: rawPath, headers: { 'user-agent': 'Mozilla/5.0 SamoTest' } }, (res) => {
+      res.resume();
+      res.on('end', () => resolve({ status: res.statusCode, location: res.headers.location || '' }));
+    }).on('error', reject);
+  });
+  for (const rawPath of ['//evil.example/', '//evil.example/?x=1', '///evil.example/', '/%5Cevil.example/', '//evil.example//', '/\\evil.example/', '/\\/evil.example/']) {
+    const res = await rawGet(rawPath);
+    assert.ok(!/^\/[/\\]/.test(res.location), `${rawPath} → ${res.status} ${res.location}`);
+    if (res.status === 301) assert.equal(new URL(res.location, 'https://shop.example').origin, 'https://shop.example', rawPath);
+  }
+  assert.deepEqual(await rawGet('//evil.example/?x=1'), { status: 301, location: '/evil.example?x=1' });
+
   assert.equal((await t.client.get('/')).headers.get('cache-control'), 'private, no-cache');
   assert.match((await t.client.get('/sitemap.xml')).headers.get('cache-control'), /public/);
 
@@ -355,7 +372,9 @@ test('view helpers', () => {
   assert.equal(withQuery('/catalog', { category: 'filter', sort: '', q: undefined, page: 1 }), '/catalog?category=filter');
   assert.equal(withQuery('/catalog', { page: 3, q: 'кофе' }), '/catalog?page=3&q=%D0%BA%D0%BE%D1%84%D0%B5');
   assert.equal(safeLocalPath('/cart?x=1'), '/cart?x=1');
-  for (const bad of ['//evil.example', '/\\evil.example', 'https://evil.example', 'javascript:alert(1)', '', null, '/a\r\nSet-Cookie: x=1']) {
+  assert.equal(safeLocalPath('/a/../cart?x=1#top'), '/cart?x=1#top');
+  for (const bad of ['//evil.example', '/\\evil.example', 'https://evil.example', 'javascript:alert(1)', '', null, '/a\r\nSet-Cookie: x=1',
+    '/.//evil.example/', '/..//evil.example', '/a/..//evil.example/', '/./\\evil.example', `/${'a'.repeat(600)}`]) {
     assert.equal(safeLocalPath(bad, '/fallback'), '/fallback', String(bad));
   }
   assert.deepEqual(tastingNotes([{ roast: 'Светлая', subtitle: 'Жасмин, Бергамот' }, { roast: '', subtitle: 'Сталь, 38 мм' }, { roast: 'Средняя', subtitle: '10 порций · жасмин' }, { roast: 'Средняя', subtitle: 'жасмин, какао' }]), ['жасмин', 'бергамот', 'какао']);

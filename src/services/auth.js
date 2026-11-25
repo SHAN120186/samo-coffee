@@ -38,6 +38,15 @@ const publicAdmin = (row) => (row ? { id: row.id, email: row.email, name: row.na
 
 /** Login attempts: 8 per 15 minutes per IP+e-mail. Use loginLimiter.hit(key) / .reset(key). */
 export const loginLimiter = new RateLimiter({ windowMs: 15 * 60 * 1000, max: 8 });
+/**
+ * Failed logins per ACCOUNT from any address: 20 per 15 minutes. A client can change (or, behind a
+ * misconfigured proxy, forge) its IP address, but not the account it is guessing the password of.
+ * A browser that has logged into that account before (signed DEVICE_COOKIE) is exempt, so the
+ * owner cannot be locked out of the panel by somebody who hammers the login form.
+ */
+export const accountLoginLimiter = new RateLimiter({ windowMs: 15 * 60 * 1000, max: 20 });
+/** Signed cookie that remembers the account this browser has successfully logged into. */
+export const DEVICE_COOKIE = 'sc_admin_dev';
 // A dummy hash keeps the timing equal for unknown e-mails.
 const DUMMY_HASH = hashPassword(crypto.randomBytes(8).toString('hex'));
 
@@ -55,17 +64,25 @@ export function ensureDefaultAdmin() {
 
 /**
  * Check credentials (rate limited) and open a session.
+ * @param {string} email @param {string} password
+ * @param {{ ip?: string, userAgent?: string, knownAccount?: string }} [o] knownAccount — value of the
+ *   signed DEVICE_COOKIE (the e-mail this browser logged in with before)
  * @returns {{ ok: true, admin: object, token: string } | { ok: false, reason: 'rate_limited'|'invalid', retryAfterSec?: number }}
  */
-export function login(email, password, { ip = '', userAgent = '' } = {}) {
-  const key = `${ip}|${String(email || '').toLowerCase().slice(0, 100)}`;
+export function login(email, password, { ip = '', userAgent = '', knownAccount = '' } = {}) {
+  const account = String(email || '').trim().toLowerCase().slice(0, 100);
+  const key = `${ip}|${account}`;
   const peek = loginLimiter.peek(key);
   if (!peek.allowed) return { ok: false, reason: 'rate_limited', retryAfterSec: peek.retryAfterSec };
+  const trustedDevice = Boolean(account) && String(knownAccount || '').toLowerCase() === account;
+  const accountPeek = accountLoginLimiter.peek(account);
+  if (!accountPeek.allowed && !trustedDevice) return { ok: false, reason: 'rate_limited', retryAfterSec: accountPeek.retryAfterSec };
 
-  const row = get('SELECT * FROM admins WHERE email = ? AND active = 1', String(email || '').trim().toLowerCase());
+  const row = get('SELECT * FROM admins WHERE email = ? AND active = 1', account);
   const valid = verifyPassword(password, row ? row.password_hash : DUMMY_HASH) && Boolean(row);
   if (!valid) {
     loginLimiter.hit(key);
+    accountLoginLimiter.hit(account);
     return { ok: false, reason: 'invalid' };
   }
   loginLimiter.reset(key);
@@ -105,6 +122,11 @@ export function setSessionCookie(res, token) {
 
 export function clearSessionCookie(res) {
   res.clearCookie(ADMIN_COOKIE, cookieOptions());
+}
+
+/** Remember that this browser has logged into `email` (see accountLoginLimiter). Not a credential. */
+export function setDeviceCookie(res, email) {
+  res.cookie(DEVICE_COOKIE, String(email || '').toLowerCase(), { ...cookieOptions(), path: '/admin', maxAge: 365 * 86400000 });
 }
 
 /** Middleware: sets req.admin and res.locals.admin (null when not logged in). */

@@ -74,10 +74,13 @@ function applySiteLocals(req, res) {
 
 router.use((req, res, next) => {
   if (FOREIGN_PATH.test(req.path)) return next();
-  // One URL per page: "/catalog/" → "/catalog" (keeps the query string).
+  // One URL per page: "/catalog/" → "/catalog" (keeps the query string). The target always starts
+  // with exactly one slash: "//evil.example/" must never become the protocol-relative
+  // "Location: //evil.example" (an open redirect), and a backslash is a slash for browsers.
   if (req.method === 'GET' && req.path.length > 1 && req.path.endsWith('/')) {
     const query = req.originalUrl.slice(req.path.length);
-    return res.redirect(301, `${req.path.replace(/\/+$/, '') || '/'}${query}`);
+    const target = `/${req.path.replace(/^[/\\]+/, '').replace(/\/+$/, '')}`;
+    return res.redirect(301, `${target}${query}`);
   }
   // Pages carry per-visitor data (cart counter, CSRF token): never store them in shared caches.
   res.set('Cache-Control', 'private, no-cache');

@@ -118,7 +118,10 @@ test('config: BASE_URL falls back to the Railway domain; trust proxy behind the 
   assert.equal(local.baseUrl, 'http://localhost:4567');
   assert.equal(local.trustProxy, '', 'no proxy is trusted in local development');
 
-  assert.equal(loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'x'.repeat(24) }).trustProxy, '1');
+  // X-Forwarded-For is trusted only where a proxy is known to exist (Railway) or when asked for:
+  // a directly exposed production app must not let clients choose their own IP address
+  assert.equal(loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'x'.repeat(24) }).trustProxy, '');
+  assert.equal(loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'x'.repeat(24), TRUST_PROXY: '1' }).trustProxy, '1');
   for (const off of ['0', 'false', 'off']) {
     assert.equal(loadConfig({ NODE_ENV: 'production', SESSION_SECRET: 'x'.repeat(24), TRUST_PROXY: off }).trustProxy, '', `TRUST_PROXY=${off} disables it`);
   }

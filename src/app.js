@@ -152,6 +152,19 @@ export async function createApp({ bot = true } = {}) {
   const app = express();
   app.disable('x-powered-by');
   if (config.trustProxy) app.set('trust proxy', /^\d+$/.test(config.trustProxy) ? Number(config.trustProxy) : config.trustProxy);
+  else if (config.isProd) {
+    // Behind a reverse proxy without TRUST_PROXY every visitor shares the proxy's address (one
+    // rate-limit bucket for everybody). Say so once instead of failing silently.
+    let warned = false;
+    app.use((req, res, next) => {
+      if (!warned && req.headers['x-forwarded-for']) {
+        warned = true;
+        console.warn('[samo] requests carry X-Forwarded-For but TRUST_PROXY is not set: client IPs are taken from the TCP connection. '
+          + 'If the app is reachable only through your reverse proxy, set TRUST_PROXY=1.');
+      }
+      next();
+    });
+  }
   app.set('view engine', 'ejs');
   // Views are addressed from src/: res.render('site/views/home'), res.render('admin/views/orders/list')
   app.set('views', path.join(config.rootDir, 'src'));

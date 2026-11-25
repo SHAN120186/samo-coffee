@@ -149,7 +149,8 @@ test('return URLs: only same-site targets are honoured; /pay/return and /pay/sta
   const c = t.newClient();
 
   // open redirect attempts fall back to the order page
-  for (const evil of ['https://evil.example/', '//evil.example', '/\\evil.example', 'javascript:alert(1)', `${config.baseUrl}.evil.example/x`]) {
+  for (const evil of ['https://evil.example/', '//evil.example', '/\\evil.example', 'javascript:alert(1)', `${config.baseUrl}.evil.example/x`,
+    '/.//evil.example/', '/a/..//evil.example/', `${config.baseUrl}/.//evil.example/`]) {
     const res = await c.get(`/pay/order/${order.public_token}?return=${encodeURIComponent(evil)}`);
     await c.get(res.location);
     const back = await c.postForm(pathOf(res.location), { action: 'cancel' });

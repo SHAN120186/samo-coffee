@@ -63,10 +63,16 @@ const resolvePath = (p) => (p === ':memory:' ? p : path.isAbsolute(p) ? p : path
 const dataDir = resolvePath(str('DATA_DIR', './data'));
 const botToken = str('BOT_TOKEN', '');
 
-/** '' = do not trust X-Forwarded-* at all; '1' = one proxy in front (Docker + nginx/Caddy, Railway, Render…). */
+/**
+ * '' = do not trust X-Forwarded-* at all (req.ip is the TCP peer); '1' = one proxy in front.
+ * Trusting the header while clients can reach the app directly lets them pick their own "IP" and
+ * walk around every IP-keyed rate limit, so it is on by default only where a proxy is known to
+ * exist (Railway). Everywhere else it is opt-in: TRUST_PROXY=1 behind nginx / Caddy / another PaaS
+ * (docker-compose.yml sets it and publishes the port on 127.0.0.1 only).
+ */
 function resolveTrustProxy() {
   const onRailway = Boolean(str('RAILWAY_ENVIRONMENT', '') || str('RAILWAY_PUBLIC_DOMAIN', ''));
-  const value = str('TRUST_PROXY', isProd || onRailway ? '1' : '');
+  const value = str('TRUST_PROXY', onRailway ? '1' : '');
   return ['0', 'false', 'off', 'no'].includes(value.toLowerCase()) ? '' : value;
 }
 
@@ -80,7 +86,8 @@ export const config = {
   isHttps: baseUrl.startsWith('https://'),
   /**
    * Express "trust proxy": how many reverse proxies sit in front of the app (req.ip, req.protocol).
-   * Defaults to 1 in production and on Railway (one edge proxy); set 0/false when exposed directly.
+   * Defaults to 1 on Railway (one edge proxy) and to "none" everywhere else — set TRUST_PROXY=1
+   * when the app is reachable ONLY through your own reverse proxy.
    */
   trustProxy: resolveTrustProxy(),
   rootDir: ROOT_DIR,

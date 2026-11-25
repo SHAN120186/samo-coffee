@@ -75,7 +75,7 @@ router.use((req, res, next) => {
 // ─────────────────────────────── login / logout (public part)
 
 const DEV_PASSWORD = 'admin12345';
-/** IP-wide brake on top of the per-account limiter built into auth.login(). */
+/** IP-wide brake on top of the limiters built into auth.login() (per IP+account and per account from any IP). */
 const loginIpLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 40,
@@ -107,7 +107,9 @@ router.post('/login', loginIpLimit, (req, res) => {
   if (!email || !password) {
     return renderLogin(req, res, { status: 422, error: 'Введите e-mail и пароль', email });
   }
-  const result = auth.login(email, password, { ip: req.ip, userAgent: req.get('user-agent') || '' });
+  const result = auth.login(email, password, {
+    ip: req.ip, userAgent: req.get('user-agent') || '', knownAccount: req.signedCookies?.[auth.DEVICE_COOKIE] || '',
+  });
   if (!result.ok) {
     if (result.reason === 'rate_limited') {
       const minutes = Math.max(1, Math.ceil((result.retryAfterSec || 60) / 60));
@@ -117,6 +119,7 @@ router.post('/login', loginIpLimit, (req, res) => {
     return renderLogin(req, res, { status: 401, error: 'Неверный e-mail или пароль', email });
   }
   auth.setSessionCookie(res, result.token);
+  auth.setDeviceCookie(res, result.admin.email);
   return res.redirect(auth.safeNext(req.body.next));
 });
 
