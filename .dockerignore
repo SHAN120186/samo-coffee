@@ -1,9 +1,8 @@
 node_modules
 .git
 .env
-data/*.db
-data/*.db-*
-public/uploads/*
-!public/uploads/.gitkeep
+data/*
+!data/.gitkeep
 tests
+docs/screenshots
 *.log

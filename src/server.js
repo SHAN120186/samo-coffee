@@ -5,12 +5,38 @@ import { createApp } from './app.js';
 import { stopBot } from './bot/index.js';
 import * as subscriptions from './services/subscriptions.js';
 import * as notify from './services/notify.js';
+import { activeProviderId, resolveProvider } from './payments/index.js';
+
+// Opt-in demo data for a first deploy (SEED_ON_EMPTY=1): only when the database holds no business
+// data yet — an existing shop is never touched, and a second boot finds the data and skips.
+if (config.seedOnEmpty) {
+  try {
+    const { seedIfEmpty } = await import('./db/seed.js');
+    const summary = seedIfEmpty({ quiet: true });
+    console.log(summary
+      ? `[samo] SEED_ON_EMPTY: demo data loaded (${summary.products} products, ${summary.orders} orders, ${summary.posts} posts)`
+      : '[samo] SEED_ON_EMPTY: the database already has data — nothing was changed');
+  } catch (err) {
+    console.error('[samo] SEED_ON_EMPTY failed (the app starts without demo data):', err);
+  }
+}
 
 const app = await createApp();
 
-const server = app.listen(config.port, () => {
-  console.log(`[samo] ${config.env} · ${config.baseUrl} (port ${config.port})`);
-  console.log(`[samo] payments: ${config.payments.provider} · bot: ${config.bot.enabled ? `${config.bot.mode}` : 'disabled (no BOT_TOKEN)'} · db: ${config.databasePath}`);
+/** What a customer gets at checkout right now (for the boot log). */
+function paymentStatus() {
+  try {
+    const provider = resolveProvider();
+    const wanted = activeProviderId();
+    return provider.id === wanted ? provider.id : `${provider.id} (fallback: "${wanted}" is not configured)`;
+  } catch {
+    return `UNAVAILABLE — "${activeProviderId()}" is not configured${config.isProd ? ' (the demo checkout is off in production: set ALLOW_MOCK_PAYMENTS=1 or configure a provider)' : ''}`;
+  }
+}
+
+const server = app.listen(config.port, config.host, () => {
+  console.log(`[samo] ${config.env} · ${config.baseUrl} (listening on ${config.host}:${config.port})`);
+  console.log(`[samo] payments: ${paymentStatus()} · bot: ${config.bot.enabled ? `${config.bot.mode}` : 'disabled (no BOT_TOKEN)'} · db: ${config.databasePath} · uploads: ${config.uploads.dir}`);
 });
 
 // Housekeeping: expire subscriptions whose period has ended.

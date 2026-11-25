@@ -8,6 +8,7 @@ import * as orders from '../../services/orders.js';
 import * as catalog from '../../services/catalog.js';
 import * as notify from '../../services/notify.js';
 import * as telegramPayments from '../../services/telegramPayments.js';
+import { buildInvoiceParams } from '../../payments/index.js';
 import { escapeTg } from '../../lib/escape.js';
 import { formatSum } from '../../lib/money.js';
 import { cb, inline, siteUrl, urlButton } from '../keyboards.js';
@@ -33,12 +34,15 @@ async function sendPaymentLink(ctx, order) {
  */
 export async function sendPayment(ctx, order) {
   if (!telegramPayments.isConfigured()) return sendPaymentLink(ctx, order);
-  const invoice = telegramPayments.buildInvoice(order);
   try {
+    // the same invoice the Mini App and the site get from the "telegram" provider (amounts re-checked,
+    // TELEGRAM_PAYMENT_NEED_PHONE honoured)
+    const invoice = buildInvoiceParams(order);
     await ctx.reply(texts.invoiceIntro(order));
     await ctx.api.sendInvoice(ctx.chat.id, invoice.title, invoice.description, invoice.payload, invoice.currency, invoice.prices, {
       provider_token: invoice.provider_token,
       start_parameter: `order_${order.number}`.replace(/[^\w-]/g, ''),
+      ...(invoice.need_phone_number ? { need_phone_number: true } : {}),
     });
     orders.markPendingPayment(order.id, 'telegram');
     return { via: 'invoice' };

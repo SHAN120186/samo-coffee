@@ -12,9 +12,13 @@
       <span class="empty__icon"><%- icon('upload', 22) %></span>
       <strong style="color: var(--color-text)">Перетащите изображения сюда или выберите файлы</strong>
       <span>JPG, PNG, WebP, GIF или AVIF · до <%= maxMb %> МБ · до 10 файлов за раз</span>
-      <label class="visually-hidden" for="media-files">Файлы изображений</label>
-      <input type="file" id="media-files" name="files" accept="<%= accept %>" multiple required>
-      <noscript><button class="btn btn--primary" type="submit">Загрузить</button></noscript>
+      <%# the native control is hidden (its caption is in the browser's language); the label is the button %>
+      <input class="dropzone__input" type="file" id="media-files" name="files" accept="<%= accept %>" multiple required>
+      <label class="btn btn--sm dropzone__pick" for="media-files"><%- icon('image', 14) %> Выбрать файлы</label>
+      <noscript>
+        <style>.dropzone .dropzone__input { position: static; width: auto; height: auto; opacity: 1; clip: auto; clip-path: none; }</style>
+        <button class="btn btn--primary" type="submit">Загрузить</button>
+      </noscript>
     </div>
   </form>
 </section>

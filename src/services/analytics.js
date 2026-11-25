@@ -144,7 +144,8 @@ export function pageViewMiddleware({ exclude = [] } = {}) {
     if (!config.analytics.enabled || req.method !== 'GET' || req.isBot || skip(req.path) || /\.[a-z0-9]{2,5}$/i.test(req.path)) return next();
     res.on('finish', () => {
       try {
-        if (res.statusCode >= 400 || res.statusCode === 304) return;
+        // only pages that were actually shown: redirects (cart → checkout, trailing slash) are not views
+        if (res.statusCode < 200 || res.statusCode >= 300) return;
         if (!String(res.getHeader('content-type') || '').includes('text/html')) return;
         recordPageView({
           sessionId: req.sessionId,

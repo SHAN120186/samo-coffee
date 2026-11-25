@@ -109,7 +109,7 @@ function organizationLd(settings) {
     description: settings.seo_description,
     url: config.baseUrl,
     logo: abs('/img/logo.svg'),
-    image: abs('/img/og.svg'),
+    image: abs('/img/og.png'),
     telephone: settings.phone,
     email: settings.email,
     address: { '@type': 'PostalAddress', streetAddress: settings.address, addressLocality: 'Ташкент', addressCountry: 'UZ' },
@@ -752,8 +752,12 @@ router.use((req, res, next) => {
   return renderNotFound(req, res);
 });
 
+/**
+ * Branded error page of the site. Mounted twice: at the end of this router, and by app.js as an
+ * app-level handler for errors raised BEFORE the router is reached (e.g. a failed CSRF check).
+ */
 // eslint-disable-next-line no-unused-vars
-router.use((err, req, res, next) => {
+export function siteErrorHandler(err, req, res, next) {
   if (res.headersSent || wantsJson(req) || FOREIGN_PATH.test(req.path)) return next(err);
   const status = Number(err.status || err.statusCode) || 500;
   try {
@@ -773,6 +777,8 @@ router.use((err, req, res, next) => {
     console.error('[site] error page failed:', renderError);
     return next(err);
   }
-});
+}
+
+router.use(siteErrorHandler);
 
 export default router;

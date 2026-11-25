@@ -4,7 +4,8 @@
   const pageTitle = m.title || settings.seo_title || siteName;
   const pageDescription = m.description || settings.seo_description || '';
   const canonical = m.canonical || canonicalUrl;
-  const ogImage = abs(m.image || '/img/og.svg');
+  // social networks do not render SVG previews: vector artwork falls back to the PNG share image
+  const ogImage = abs(m.image && !/\.svg(\?|$)/i.test(m.image) ? m.image : '/img/og.png');
   const phoneHref = telHref(settings.phone);
 -%>
 <!doctype html>

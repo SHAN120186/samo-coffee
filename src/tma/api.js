@@ -448,9 +448,10 @@ router.use((err, req, res, next) => {
   const expose = err instanceof AppError || (status >= 400 && status < 500);
   return res.status(status).json({
     ok: false,
-    error: err.code || (status >= 500 ? 'internal' : 'error'),
+    // unexpected failures never leak their own codes (e.g. database error names)
+    error: expose ? (err.code || 'error') : 'internal',
     message: expose && err.message ? err.message : 'Что-то пошло не так. Попробуйте ещё раз.',
-    ...(err.details ? { details: err.details } : {}),
+    ...(expose && err.details ? { details: err.details } : {}),
   });
 });
 

@@ -1,5 +1,6 @@
 # docker compose up -d --build
 # Put secrets (SESSION_SECRET, ADMIN_PASSWORD, BOT_TOKEN, payment keys …) into .env next to this file.
+# NODE_ENV, PORT and DATA_DIR below always win over .env: inside the container they must stay as is.
 services:
   app:
     build: .
@@ -11,14 +12,15 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_PATH: /app/data/samo.db
-      UPLOAD_DIR: /app/public/uploads
+      DATA_DIR: /data
+      # the paths inside the container are fixed by DATA_DIR; ignore local-development values from .env
+      DATABASE_PATH: ""
+      UPLOAD_DIR: ""
     ports:
       - "3000:3000"
     volumes:
-      - samo-data:/app/data
-      - samo-uploads:/app/public/uploads
+      # one volume keeps the SQLite database (/data/samo.db) and the uploaded media (/data/uploads)
+      - samo-data:/data
 
 volumes:
   samo-data:
-  samo-uploads:

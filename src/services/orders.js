@@ -26,6 +26,9 @@ export const PAYMENT_STATUS_LABELS = notify.PAYMENT_STATUS_LABELS;
 export const CHANNEL_LABELS = notify.CHANNEL_LABELS;
 export const DELIVERY_METHOD_LABELS = { courier: 'Курьером', pickup: 'Самовывоз' };
 export const KIND_LABELS = { product: 'Товары', subscription: 'Подписка' };
+/** Human names of payment providers for the order history ("Оплата: Payme"). */
+export const PAYMENT_PROVIDER_LABELS = { mock: 'Демо-оплата', telegram: 'Telegram Payments', payme: 'Payme', click: 'Click', manual: 'вручную в админ-панели' };
+const providerLabel = (provider) => PAYMENT_PROVIDER_LABELS[provider] || String(provider || '—');
 
 /** Status machine: current status → statuses it may move to. */
 export const TRANSITIONS = {
@@ -310,7 +313,7 @@ export function markPendingPayment(orderId, provider) {
     tx(() => {
       run(`UPDATE orders SET status = 'pending_payment', payment_status = 'pending', payment_provider = ?, updated_at = ? WHERE id = ?`,
         provider, now(), row.id);
-      if (row.status !== 'pending_payment') logEvent(row.id, 'status', { from: row.status, to: 'pending_payment', note: `Провайдер: ${provider}` });
+      if (row.status !== 'pending_payment') logEvent(row.id, 'status', { from: row.status, to: 'pending_payment', note: `Способ оплаты: ${providerLabel(provider)}` });
     });
   }
   return getOrder(row.id);
@@ -379,7 +382,7 @@ export function markPaid(orderId, { provider = 'manual', txId = null, paymentId 
       subscriptionResult = subscriptions.activateFromOrder(row);
     }
 
-    logEvent(row.id, 'payment', { from: row.status, to: 'paid', note: `Оплата: ${provider}${txId ? ` (${txId})` : ''}`, actor: actor || `provider:${provider}` });
+    logEvent(row.id, 'payment', { from: row.status, to: 'paid', note: `Оплата: ${providerLabel(provider)}${txId ? ` (${txId})` : ''}`, actor: actor || `provider:${provider}` });
     analytics.trackEvent('purchase', {
       channel: row.channel, sessionId: row.session_id, tgUserId: row.tg_user_id, orderId: row.id, value: row.total,
       meta: { provider, kind: row.kind },

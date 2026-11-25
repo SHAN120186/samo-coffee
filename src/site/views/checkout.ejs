@@ -31,7 +31,7 @@
           <div class="form-grid">
             <%- include('partials/field', { name: 'name', label: 'Имя', value: values.name, error: errors.name, autocomplete: 'name', required: true, maxlength: 120, placeholder: 'Как к вам обращаться' }) %>
             <%- include('partials/field', { name: 'phone', label: 'Телефон', type: 'tel', value: values.phone, error: errors.phone, autocomplete: 'tel', inputmode: 'tel', required: true, maxlength: 40, placeholder: '+998 90 123 45 67' }) %>
-            <%- include('partials/field', { name: 'email', label: 'E-mail', type: 'email', value: values.email, error: errors.email, autocomplete: 'email', maxlength: 160, placeholder: 'you@example.com', hint: 'Пришлём на него детали заказа', wide: true }) %>
+            <%- include('partials/field', { name: 'email', label: 'E-mail', type: 'email', value: values.email, error: errors.email, autocomplete: 'email', maxlength: 160, placeholder: 'you@example.com', hint: 'Запасной способ связи, если не дозвонимся', wide: true }) %>
           </div>
         </fieldset>
 

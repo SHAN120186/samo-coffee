@@ -1,10 +1,10 @@
 node_modules/
 .env
-data/*.db
-data/*.db-*
-public/uploads/*
-!public/uploads/.gitkeep
-!public/uploads/seed/
+# runtime data: SQLite database + uploaded media (DATA_DIR)
+data/*
+!data/.gitkeep
+# legacy upload location (before DATA_DIR)
+public/uploads/
 *.log
 .DS_Store
 test-results/

@@ -14,6 +14,8 @@ import * as catalog from '../services/catalog.js';
 import * as subscriptions from '../services/subscriptions.js';
 import * as posts from '../services/posts.js';
 import * as faq from '../services/faq.js';
+import { PAYMENT_PROVIDER_LABELS } from '../services/orders.js';
+import { ensureSiteBlocks } from '../site/blocks.js';
 import { CATEGORIES, PRODUCTS, PLANS, POSTS, FAQ, FEEDBACK } from './seedData.js';
 
 const DAY = 86400000;
@@ -36,7 +38,28 @@ function mulberry32(seed) {
   };
 }
 
-export function seed({ quiet = false } = {}) {
+/** Tables that hold the shop's own data: when all of them are empty the database is a fresh install. */
+const BUSINESS_TABLES = ['products', 'categories', 'plans', 'posts', 'faq', 'orders', 'customers'];
+
+/** True when the database has no catalog, content or orders yet (first boot of a new deployment). */
+export function isEmptyDatabase() {
+  return BUSINESS_TABLES.every((table) => get(`SELECT COUNT(*) AS n FROM ${table}`).n === 0);
+}
+
+/**
+ * SEED_ON_EMPTY: load the demo data only into a fresh database. Nothing is deleted — settings and
+ * content blocks that already exist are kept. Returns the seed summary, or null when data exists.
+ */
+export function seedIfEmpty({ quiet = true } = {}) {
+  if (!isEmptyDatabase()) return null;
+  return seed({ quiet, wipe: false });
+}
+
+/**
+ * @param {{ quiet?: boolean, wipe?: boolean }} [options] wipe=false keeps whatever is in the database
+ *   (used by seedIfEmpty on a fresh install); the default resets all business data first.
+ */
+export function seed({ quiet = false, wipe = true } = {}) {
   const log = (...a) => { if (!quiet) console.log(...a); };
   const rand = mulberry32(20261124);
   const chance = (p) => rand() < p;
@@ -59,14 +82,17 @@ export function seed({ quiet = false } = {}) {
   const today0 = Math.floor((nowMs + off) / DAY) * DAY - off; // local midnight (UTC ms)
 
   // ───────────── reset
-  tx(() => {
-    for (const table of WIPE) db.exec(`DELETE FROM ${table}`);
-    db.exec(`DELETE FROM sqlite_sequence WHERE name IN (${WIPE.map((t) => `'${t}'`).join(',')})`);
-  });
+  if (wipe) {
+    tx(() => {
+      for (const table of WIPE) db.exec(`DELETE FROM ${table}`);
+      db.exec(`DELETE FROM sqlite_sequence WHERE name IN (${WIPE.map((t) => `'${t}'`).join(',')})`);
+    });
+  }
   settings.clearCache();
   content.clearCache();
   auth.ensureDefaultAdmin();
   content.ensureDefaults();
+  ensureSiteBlocks(); // the public site's extra blocks, so Admin → Контент is complete right after seeding
 
   // ───────────── catalog, plans, blog, faq (through services → same validation/sanitizing as the admin)
   const catId = {};
@@ -345,26 +371,29 @@ export function seed({ quiet = false } = {}) {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '{"seed":true}', ?, ?)`);
     const flow = ['processing', 'shipped', 'delivered'];
 
+    const setNumber = db.prepare('UPDATE orders SET number = ? WHERE id = ?');
+
     orderSpecs.forEach((o, index) => {
-      const id = index + 1;
-      o.id = id;
       const paidAt = o.paid ? o.at + int(40, 400) * 1000 : null;
       const closedAt = ['cancelled', 'refunded'].includes(o.status) ? Math.min(nowMs, o.at + int(20, 60) * 3600000) : null;
       const updatedAt = Math.min(nowMs, closedAt || (paidAt ? paidAt + int(1, 30) * 3600000 : o.at));
       const c = o.customer;
-      insOrder.run(`SC-${100000 + id}`, hex(32), c.id, o.plan ? 'subscription' : 'product', o.plan ? o.plan.id : null, o.status, o.paymentStatus,
+      // the id comes from the database (it does not start at 1 when rows were deleted before), the number follows it
+      const id = Number(insOrder.run(`seed-${index}`, hex(32), c.id, o.plan ? 'subscription' : 'product', o.plan ? o.plan.id : null, o.status, o.paymentStatus,
         o.provider, o.channel, o.subtotal, o.fee, o.total, c.name, c.phone, c.email || '', o.method, o.method === 'pickup' ? '' : c.address, o.comment,
-        o.tgUserId, o.session, o.source || '', paidAt ? iso(paidAt) : null, closedAt ? iso(closedAt) : null, iso(o.at), iso(updatedAt));
+        o.tgUserId, o.session, o.source || '', paidAt ? iso(paidAt) : null, closedAt ? iso(closedAt) : null, iso(o.at), iso(updatedAt)).lastInsertRowid);
+      o.id = id;
+      setNumber.run(`SC-${100000 + id}`, id);
       if (o.plan) insItem.run(id, null, o.plan.id, `Подписка «${o.plan.title}»`, o.plan.image, o.plan.price, 1, o.plan.price);
       else for (const it of o.items) insItem.run(id, it.productId, null, it.title, it.image, it.price, it.qty, it.price * it.qty);
 
       insEvent.run(id, 'created', null, 'new', '', 'customer', iso(o.at));
-      if (o.provider) insEvent.run(id, 'status', 'new', 'pending_payment', `Провайдер: ${o.provider}`, 'system', iso(o.at + 5000));
+      if (o.provider) insEvent.run(id, 'status', 'new', 'pending_payment', `Способ оплаты: ${PAYMENT_PROVIDER_LABELS[o.provider] || o.provider}`, 'system', iso(o.at + 5000));
       if (o.paid) {
         const tx = `${o.provider === 'payme' ? '' : `${o.provider}_`}${hex(24)}`;
         insPay.run(id, o.provider, tx, o.total, o.status === 'refunded' ? 'refunded' : 'paid', o.provider === 'payme' ? (o.status === 'refunded' ? -2 : 2) : 0,
           o.at + 8000, paidAt, o.status === 'refunded' ? closedAt : null, iso(o.at + 8000), iso(paidAt));
-        insEvent.run(id, 'payment', 'pending_payment', 'paid', `Оплата: ${o.provider} (${tx})`, `provider:${o.provider}`, iso(paidAt));
+        insEvent.run(id, 'payment', 'pending_payment', 'paid', `Оплата: ${PAYMENT_PROVIDER_LABELS[o.provider] || o.provider} (${tx})`, `provider:${o.provider}`, iso(paidAt));
         let prev = 'paid';
         let t = paidAt;
         for (const step of flow) {

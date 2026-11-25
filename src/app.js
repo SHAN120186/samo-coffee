@@ -18,7 +18,7 @@ import * as content from './services/content.js';
 import * as analytics from './services/analytics.js';
 import * as auth from './services/auth.js';
 
-import siteRouter from './site/routes.js';
+import siteRouter, { siteErrorHandler } from './site/routes.js';
 import adminRouter from './admin/routes.js';
 import tmaApiRouter from './tma/api.js';
 import paymentsRouter, { paymentsErrorHandler } from './payments/routes.js';
@@ -172,8 +172,8 @@ export async function createApp({ bot = true } = {}) {
 
   app.use(analytics.sessionMiddleware({ noCookie: COOKIELESS }));
   app.use(flashMiddleware());
+  app.use(viewLocals()); // before the CSRF check, so the error pages rendered for a failed check have their locals
   app.use(csrfProtection({ ignore: CSRF_IGNORE }));
-  app.use(viewLocals());
 
   app.use('/admin', adminRouter);
   app.use('/api/tma', tmaApiRouter);
@@ -202,6 +202,8 @@ export async function createApp({ bot = true } = {}) {
   // Payment providers must be answered in their own protocol even when the request was rejected
   // before reaching the router (malformed body); everything else falls through to the handler below.
   app.use('/pay', paymentsErrorHandler);
+  // Site pages get the branded error page also for errors raised before the site router (CSRF check, body parser).
+  app.use(siteErrorHandler);
 
   // eslint-disable-next-line no-unused-vars
   app.use((err, req, res, next) => {
@@ -211,7 +213,9 @@ export async function createApp({ bot = true } = {}) {
     if (res.headersSent) return next(err);
     const message = expose && err.message ? err.message : 'Что-то пошло не так. Мы уже разбираемся.';
     if (wantsJson(req)) {
-      return res.status(status).json({ ok: false, error: err.code || (status === 500 ? 'internal' : 'error'), message, ...(err.details ? { details: err.details } : {}) });
+      // internal failures never leak their own codes (e.g. database error names) to clients
+      const code = status >= 500 && !expose ? 'internal' : (err.code || 'error');
+      return res.status(status).json({ ok: false, error: code, message, ...(err.details && code !== 'internal' ? { details: err.details } : {}) });
     }
     return errorPage(res, status, status === 404 ? 'Страница не найдена' : status === 403 ? 'Доступ запрещён' : 'Упс, ошибка', message);
   });

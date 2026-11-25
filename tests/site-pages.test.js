@@ -111,7 +111,14 @@ test('SEO: meta tags, Open Graph, canonical, JSON-LD', async () => {
   assert.match(page.text, /<meta name="description" content="[^"]{40,}">/);
   assert.match(page.text, /<link rel="canonical" href="http:\/\/localhost:3000\/catalog\/ethiopia-yirgacheffe">/);
   assert.match(page.text, /<meta property="og:type" content="product">/);
-  assert.match(page.text, /<meta property="og:image" content="http:\/\/localhost:3000\/img\/products\/ethiopia-yirgacheffe\.svg">/);
+  // vector artwork is not rendered by social networks → the PNG share image is used for it …
+  assert.match(page.text, /<meta property="og:image" content="http:\/\/localhost:3000\/img\/og\.png">/);
+  assert.equal((await t.client.get('/img/og.png')).headers.get('content-type'), 'image/png');
+  // … while a product with an uploaded photo is shared with its own picture
+  catalog.updateProduct(product.id, { images: ['/uploads/photo-of-the-bag.jpg', ...product.images] });
+  const withPhoto = await t.client.get(product.url);
+  assert.match(withPhoto.text, /<meta property="og:image" content="http:\/\/localhost:3000\/uploads\/photo-of-the-bag\.jpg">/);
+  catalog.updateProduct(product.id, { images: product.images });
   const ld = jsonLd(page.text);
   const productLd = ld.find((x) => x['@type'] === 'Product');
   assert.equal(productLd.name, product.title);

@@ -35,7 +35,19 @@ const nodeEnv = str('NODE_ENV', 'development');
 const isProd = nodeEnv === 'production';
 const isTest = nodeEnv === 'test';
 const port = int('PORT', 3000);
-const baseUrl = str('BASE_URL', `http://localhost:${port}`).replace(/\/+$/, '');
+/** Interface to listen on. 0.0.0.0 = every interface (needed inside containers and on PaaS such as Railway). */
+const host = str('HOST', '0.0.0.0');
+
+// Public address. When BASE_URL is not set, hosting platforms that publish the service domain in the
+// environment (Railway: RAILWAY_PUBLIC_DOMAIN) are used; the last resort is http://localhost:PORT.
+function resolveBaseUrl() {
+  const explicit = str('BASE_URL', '');
+  if (explicit) return explicit;
+  const railwayDomain = str('RAILWAY_PUBLIC_DOMAIN', '').replace(/^https?:\/\//, '');
+  if (railwayDomain) return `https://${railwayDomain}`;
+  return `http://localhost:${port}`;
+}
+const baseUrl = resolveBaseUrl().replace(/\/+$/, '');
 
 const sessionSecret = str('SESSION_SECRET', '');
 if (isProd && sessionSecret.length < 16) {
@@ -43,19 +55,40 @@ if (isProd && sessionSecret.length < 16) {
 }
 
 const resolvePath = (p) => (p === ':memory:' ? p : path.isAbsolute(p) ? p : path.resolve(ROOT_DIR, p));
+/**
+ * ONE directory holds everything that must survive a redeploy: the SQLite database and the uploaded
+ * media. Mount a persistent volume there (Docker: /data, Railway: a Volume mounted at /data).
+ * DATABASE_PATH / UPLOAD_DIR still override the individual locations.
+ */
+const dataDir = resolvePath(str('DATA_DIR', './data'));
 const botToken = str('BOT_TOKEN', '');
+
+/** '' = do not trust X-Forwarded-* at all; '1' = one proxy in front (Docker + nginx/Caddy, Railway, Render…). */
+function resolveTrustProxy() {
+  const onRailway = Boolean(str('RAILWAY_ENVIRONMENT', '') || str('RAILWAY_PUBLIC_DOMAIN', ''));
+  const value = str('TRUST_PROXY', isProd || onRailway ? '1' : '');
+  return ['0', 'false', 'off', 'no'].includes(value.toLowerCase()) ? '' : value;
+}
 
 export const config = {
   env: nodeEnv,
   isProd,
   isTest,
   port,
+  host,
   baseUrl,
   isHttps: baseUrl.startsWith('https://'),
-  trustProxy: str('TRUST_PROXY', isProd ? '1' : ''),
+  /**
+   * Express "trust proxy": how many reverse proxies sit in front of the app (req.ip, req.protocol).
+   * Defaults to 1 in production and on Railway (one edge proxy); set 0/false when exposed directly.
+   */
+  trustProxy: resolveTrustProxy(),
   rootDir: ROOT_DIR,
   publicDir: path.join(ROOT_DIR, 'public'),
-  databasePath: resolvePath(str('DATABASE_PATH', './data/samo.db')),
+  dataDir,
+  databasePath: str('DATABASE_PATH', '') ? resolvePath(str('DATABASE_PATH', '')) : path.join(dataDir, 'samo.db'),
+  /** Opt-in: load the demo data on boot when the database is still empty (first deploy of a demo stand). */
+  seedOnEmpty: bool('SEED_ON_EMPTY', false),
   sessionSecret: sessionSecret || 'dev-only-insecure-secret-change-me',
   /** Minutes added to UTC for "business day" grouping in analytics (Tashkent = +300). */
   tzOffsetMinutes: int('TZ_OFFSET_MINUTES', 300),
@@ -114,7 +147,8 @@ export const config = {
   },
 
   uploads: {
-    dir: resolvePath(str('UPLOAD_DIR', './public/uploads')),
+    /** Served at /uploads. Lives next to the database so one volume keeps both. */
+    dir: str('UPLOAD_DIR', '') ? resolvePath(str('UPLOAD_DIR', '')) : path.join(dataDir, 'uploads'),
     maxBytes: int('UPLOAD_MAX_MB', 5) * 1024 * 1024,
   },
 
