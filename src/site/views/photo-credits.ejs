@@ -1,0 +1,32 @@
+<%- include('partials/head', { bodyClass: 'page-credits' }) %>
+
+<main id="main">
+  <section class="page-hero page-hero--compact">
+    <div class="container">
+      <h1 class="page-hero__title">Фотографии на сайте</h1>
+      <p class="lead">Мы используем фотографии со свободными лицензиями. Спасибо авторам — вот кто они и на каких условиях делятся своими работами.</p>
+    </div>
+  </section>
+
+  <section class="section section--flush-top">
+    <div class="container">
+      <ul class="credits">
+<% credits.forEach((p) => { -%>
+        <li class="credits__item">
+          <img src="<%= p.file %>" alt="" width="160" height="120" loading="lazy" decoding="async">
+          <div>
+            <p class="credits__title"><a href="<%= p.source %>" target="_blank" rel="noopener"><%= p.title || 'Фотография' %></a></p>
+            <p class="credits__meta">
+              <% if (p.author) { %>Автор: <%= p.author %> · <% } %>
+              <% if (p.license_url) { %><a href="<%= p.license_url %>" target="_blank" rel="noopener license"><%= p.license %></a><% } else { %><%= p.license %><% } %>
+              <% if (p.changes) { %> · <%= p.changes %><% } %>
+            </p>
+          </div>
+        </li>
+<% }) -%>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<%- include('partials/foot') %>

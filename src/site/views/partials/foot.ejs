@@ -82,6 +82,9 @@
 <% if (g.footer_payments_note) { -%>
         <p><%= g.footer_payments_note %></p>
 <% } -%>
+<% if (locals.hasPhotoCredits) { -%>
+        <p><a class="footer__credits" href="/photo-credits">Фотографии: авторы и лицензии</a></p>
+<% } -%>
       </div>
     </div>
   </footer>

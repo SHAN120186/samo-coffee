@@ -20,8 +20,15 @@ import { ensureSiteBlocks, pageContent } from './blocks.js';
 import {
   icon, abs, metaText, telHref, accentTitle, periodLabel, paginate, withQuery, safeLocalPath, tastingNotes,
 } from './helpers.js';
+import { photoCredits } from './photoCredits.js';
 
 const router = Router();
+
+// footer link to /photo-credits (CC BY photos must credit their authors)
+router.use((req, res, next) => {
+  res.locals.hasPhotoCredits = photoCredits().length > 0;
+  next();
+});
 const view = (name) => `site/views/${name}`;
 
 /** Cache-busting stamp for /site/css and /site/js (static files are cached for days in production). */
@@ -562,6 +569,15 @@ router.get('/delivery', (req, res) => {
       { icon: 'pin', label: c.card3_label, value: c.card3_value || 'Бесплатно', note: settings.pickup_address },
     ].filter((card) => card && card.label),
     meta: { title: c.seo_title, description: c.seo_description, image: c.image },
+  });
+});
+
+router.get('/photo-credits', (req, res, next) => {
+  const credits = photoCredits();
+  if (!credits.length) return next();
+  return res.render(view('photo-credits'), {
+    credits,
+    meta: { title: `Фотографии: авторы и лицензии · ${res.locals.settings.site_name}`, noindex: true },
   });
 });
 

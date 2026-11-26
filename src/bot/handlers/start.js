@@ -4,6 +4,7 @@ import * as analytics from '../../services/analytics.js';
 import * as customers from '../../services/customers.js';
 import * as orders from '../../services/orders.js';
 import * as settings from '../../services/settings.js';
+import * as content from '../../services/content.js';
 import { tgDisplayName } from '../../services/tgUsers.js';
 import { escapeTg } from '../../lib/escape.js';
 import { cb, inline, mainKeyboard, shopButton, shopLabel } from '../keyboards.js';
@@ -17,7 +18,8 @@ import { showOrders, openOrderByNumber } from './orders.js';
 import { enterSupport } from './support.js';
 import * as texts from '../texts.js';
 
-const BANNER = '/img/tma-banner.svg';
+// the Mini App banner from Admin → Контент → Мини-приложение (a photo by default)
+const banner = () => content.get('tma', 'banner_image', '/img/tma-banner.svg');
 
 /** Message with the button that opens the Mini App (or the link to it in local development). */
 export async function sendShopCard(ctx) {
@@ -31,7 +33,7 @@ export async function sendShopCard(ctx) {
       'Каталог можно полистать прямо в чате — кнопки ниже.',
       `Мини-приложение откроется кнопкой, когда у сайта будет публичный HTTPS-адрес. Сейчас оно здесь: ${escapeTg(config.tma.url)}`,
     ].join('\n');
-  await sendCard(ctx.api, ctx.chat.id, BANNER, text, { reply_markup: inline(rows) });
+  await sendCard(ctx.api, ctx.chat.id, banner(), text, { reply_markup: inline(rows) });
 }
 
 /**

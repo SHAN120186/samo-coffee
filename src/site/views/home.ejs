@@ -35,7 +35,12 @@
 
       <div class="hero__media">
 <% if (c.hero_image) { -%>
+<% const heroIsPhoto = !/\.svg(\?|$)/i.test(c.hero_image); -%>
+<% if (heroIsPhoto) { -%>
+        <img class="hero__img hero__img--photo" src="<%= c.hero_image %>" alt="<%= c.hero_image_alt || '' %>" width="1040" height="1300" fetchpriority="high">
+<% } else { -%>
         <img class="hero__img" src="<%= c.hero_image %>" alt="" width="1100" height="960" fetchpriority="high">
+<% } -%>
 <% } -%>
 <% if (c.hero_badge_text) { -%>
         <div class="stamp" aria-hidden="true">
@@ -218,6 +223,28 @@
             </figcaption>
           </figure>
         </li>
+<% }) -%>
+      </ul>
+    </div>
+  </section>
+<% } -%>
+
+<% const mood = [1, 2, 3, 4, 5].map((n) => ({ src: c[`mood${n}_image`], alt: c[`mood${n}_alt`] || '' })).filter((m) => m.src); -%>
+<% if (c.mood_title && mood.length >= 3) { -%>
+  <!-- mood gallery: cozy photos, every image is editable in Admin → Контент → Главная -->
+  <section class="section section--flush-top mood" aria-labelledby="mood-title">
+    <div class="container">
+      <div class="section-head" data-reveal>
+        <div>
+          <h2 class="section-head__title" id="mood-title"><%= c.mood_title %></h2>
+<% if (c.mood_text) { -%>
+          <p class="section-head__text"><%= c.mood_text %></p>
+<% } -%>
+        </div>
+      </div>
+      <ul class="mood__grid mood__grid--<%= mood.length %>">
+<% mood.forEach((m, i) => { -%>
+        <li class="mood__item" data-reveal><img src="<%= m.src %>" alt="<%= m.alt %>" width="<%= i === 0 ? 1200 : 800 %>" height="<%= i === 0 ? 1200 : 800 %>" loading="lazy" decoding="async"></li>
 <% }) -%>
       </ul>
     </div>
