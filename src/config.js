@@ -48,6 +48,8 @@ function resolveBaseUrl() {
   return `http://localhost:${port}`;
 }
 const baseUrl = resolveBaseUrl().replace(/\/+$/, '');
+/** true when neither BASE_URL nor a platform domain was available — links in Telegram, sitemap and payment returns are wrong */
+const baseUrlIsFallback = !str('BASE_URL', '') && !str('RAILWAY_PUBLIC_DOMAIN', '');
 
 const sessionSecret = str('SESSION_SECRET', '');
 if (isProd && sessionSecret.length < 16) {
@@ -83,6 +85,7 @@ export const config = {
   port,
   host,
   baseUrl,
+  baseUrlIsFallback,
   isHttps: baseUrl.startsWith('https://'),
   /**
    * Express "trust proxy": how many reverse proxies sit in front of the app (req.ip, req.protocol).

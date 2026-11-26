@@ -133,6 +133,8 @@ router.use((req, res, next) => {
   const fb = feedback.counts();
   // Orders that need a manager right now: paid and not yet in work.
   res.locals.navCounts = { orders: byStatus.paid, feedback: fb.unread };
+  // Production without a known public address: Telegram links, sitemap and payment returns point to localhost.
+  res.locals.baseUrlWarning = config.isProd && config.baseUrlIsFallback;
   // Which payment provider customers actually get right now (sidebar status line).
   try {
     const provider = payments.resolveProvider();

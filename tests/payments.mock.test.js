@@ -154,7 +154,7 @@ test('return URLs: only same-site targets are honoured; /pay/return and /pay/sta
     const res = await c.get(`/pay/order/${order.public_token}?return=${encodeURIComponent(evil)}`);
     await c.get(res.location);
     const back = await c.postForm(pathOf(res.location), { action: 'cancel' });
-    assert.equal(back.location, `${config.baseUrl}/order/${order.public_token}`, evil);
+    assert.equal(back.location, `/order/${order.public_token}`, evil);
   }
   assert.equal(safeReturnUrl('/tma/#/pay/1', order), `${config.baseUrl}/tma/#/pay/1`);
   assert.equal(safeReturnUrl('/ok\r\nSet-Cookie: x=1', order), `${config.baseUrl}/order/${order.public_token}`);
@@ -163,7 +163,7 @@ test('return URLs: only same-site targets are honoured; /pay/return and /pay/sta
   const status = `/pay/status/${order.public_token}`;
   const forged = await c.get(`/pay/return/${order.public_token}?payment_status=2&status=success&paid=1&error=0&amount=${order.total}`);
   assert.equal(forged.status, 303);
-  assert.equal(forged.location, `${config.baseUrl}/order/${order.public_token}`);
+  assert.equal(forged.location, `/order/${order.public_token}`);
   assert.equal(orders.getOrder(order.id).is_paid, false);
   assert.deepEqual((await c.get(`${status}?paid=1`)).json(), { ok: true, number: order.number, status: 'pending_payment', payment_status: 'pending', paid: false, can_pay: true });
 
@@ -171,17 +171,17 @@ test('return URLs: only same-site targets are honoured; /pay/return and /pay/sta
   const start = await c.get(`/pay/order/${order.public_token}?return=${encodeURIComponent('/tma/#/pay/9')}`);
   await c.get(start.location);
   const ret = await c.get(`/pay/return/${order.public_token}?return=https://evil.example/&return_url=https://evil.example/`);
-  assert.equal(ret.location, `${config.baseUrl}/tma/#/pay/9`);
+  assert.equal(ret.location, `/tma/#/pay/9`);
   await c.postForm(pathOf(start.location), { action: 'success' });
   const paidStatus = (await c.get(status)).json();
   assert.deepEqual([paidStatus.paid, paidStatus.status, paidStatus.payment_status, paidStatus.can_pay], [true, 'paid', 'paid', false]);
-  assert.equal((await c.get(`/pay/return/${order.public_token}`)).location, `${config.baseUrl}/tma/#/pay/9`);
+  assert.equal((await c.get(`/pay/return/${order.public_token}`)).location, `/tma/#/pay/9`);
 
   // a messenger building a link preview does not start a payment
   const shared = makeOrder().order;
   const preview = await c.get(shared.pay_url, { headers: { 'user-agent': 'TelegramBot (like TwitterBot)' } });
   assert.equal(preview.status, 302);
-  assert.equal(preview.location, `${config.baseUrl}/order/${shared.public_token}`);
+  assert.equal(preview.location, `/order/${shared.public_token}`);
   assert.equal(orders.getOrder(shared.id).status, 'new');
   assert.equal(paymentsRepo.listByOrder(shared.id).length, 0);
 
@@ -355,4 +355,18 @@ test('stock is not reserved by unpaid orders: a payment cannot start, or finish,
   await c.postForm(pathOf(retry.location), { action: 'success' });
   assert.equal(orders.getOrder(order.id).is_paid, true);
   assert.equal(stockOf(product), 0);
+});
+
+test('hosted payment pages are reached by path, so a wrong or missing BASE_URL cannot send the buyer elsewhere', async () => {
+  const c = t.newClient();
+  const { order } = makeOrder();
+  const start = await c.get(`/pay/order/${order.public_token}`);
+  assert.equal(start.status, 302);
+  assert.match(start.location, /^\/pay\/mock\/mock_[0-9a-f]{24}$/, 'own checkout page is a same-site path, not an absolute URL built from BASE_URL');
+  const page = await c.get(start.location);
+  assert.equal(page.status, 200);
+  assert.ok(!page.text.includes(`href="${config.baseUrl}/`), 'links on the payment page are same-site paths');
+  const paid = await c.postForm(start.location, { action: 'success' });
+  assert.equal(paid.status, 303);
+  assert.equal(paid.location, `/order/${order.public_token}`);
 });

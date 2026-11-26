@@ -203,7 +203,7 @@ test('/pay/return waits while a provider transaction is in flight and never beli
   const c = t.newClient();
   const ret = `/pay/return/${order.public_token}`;
   await c.get(`/pay/order/${order.public_token}?return=${encodeURIComponent(`/order/${order.public_token}?from=payme`)}`);
-  const target = `${config.baseUrl}/order/${order.public_token}?from=payme`;
+  const target = `/order/${order.public_token}?from=payme`;
 
   // the customer came back without paying: straight to the order
   const idle = await c.get(`${ret}?status=success`);
@@ -237,6 +237,6 @@ test('/pay/return waits while a provider transaction is in flight and never beli
   await clickComplete(second, prepared, { error: '-1' });
   const back = await c.get(`/pay/return/${second.public_token}`);
   assert.equal(back.status, 303);
-  assert.equal(back.location, `${config.baseUrl}/order/${second.public_token}`);
+  assert.equal(back.location, `/order/${second.public_token}`);
   settings.set('payment_provider', '');
 });

@@ -38,6 +38,11 @@ function paymentStatus() {
 
 const server = app.listen(config.port, config.host, () => {
   console.log(`[samo] ${config.env} · ${config.baseUrl} (listening on ${config.host}:${config.port})`);
+  if (config.isProd && config.baseUrlIsFallback) {
+    console.error('[samo] WARNING: the public address is unknown, using ' + config.baseUrl + '. Links in Telegram, the sitemap and ' +
+      'payment returns will be wrong. Set BASE_URL=https://<your domain> (on Railway: generate a domain, then Redeploy, ' +
+      'or set BASE_URL in Variables).');
+  }
   console.log(`[samo] payments: ${paymentStatus()} · bot: ${config.bot.enabled ? `${config.bot.mode}` : 'disabled (no BOT_TOKEN)'} · db: ${config.databasePath} · uploads: ${config.uploads.dir}`);
   // A broadcast that was being sent when the previous process stopped continues where it stopped.
   try {

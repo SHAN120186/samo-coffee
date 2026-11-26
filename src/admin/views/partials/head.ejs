@@ -66,6 +66,11 @@
     </header>
 
     <main class="adm-content" id="main">
+      <% if (locals.baseUrlWarning) { %>
+        <div class="flashes" role="alert">
+          <div class="alert alert--error"><%- icon('alert', 16) %><span>Сайт не знает свой публичный адрес и использует <b><%= appConfig.baseUrl %></b>. Ссылки в Telegram, карта сайта и возврат после оплаты будут вести не туда. Добавьте переменную <b>BASE_URL=https://ваш-домен</b> (на Railway: сервис → Variables) и перезапустите сервис.</span></div>
+        </div>
+      <% } %>
       <% const _flash = flash; if (_flash.length) { %>
         <div class="flashes" role="status">
           <% _flash.forEach((f) => { %>

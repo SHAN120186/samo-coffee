@@ -84,7 +84,7 @@ test('CSRF: unsafe requests need a token; API prefix is exempt', async () => {
   assert.equal(pay.status, 302);
   const page = await c.get(pay.location);
   assert.equal(page.status, 200);
-  const path = new URL(pay.location).pathname;
+  const path = new URL(pay.location, 'http://localhost').pathname;
 
   const noToken = await c.request('POST', path, { headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'action=success' });
   assert.equal(noToken.status, 403);
@@ -119,9 +119,9 @@ test('mock payment: order → hosted checkout → paid → status page (end to e
   assert.ok(checkout.text.includes('320 000 сум'), 'total is shown formatted');
   assert.ok(c.csrfToken);
 
-  const paid = await c.postForm(new URL(start.location).pathname, { action: 'success' });
+  const paid = await c.postForm(new URL(start.location, 'http://localhost').pathname, { action: 'success' });
   assert.equal(paid.status, 303);
-  assert.equal(new URL(paid.location).pathname, `/order/${order.public_token}`);
+  assert.equal(new URL(paid.location, 'http://localhost').pathname, `/order/${order.public_token}`);
 
   const fresh = orders.getOrder(order.id);
   assert.equal(fresh.status, 'paid');
@@ -136,7 +136,7 @@ test('mock payment: order → hosted checkout → paid → status page (end to e
   assert.ok(status.text.includes('Оплачен'));
 
   // replaying the form or reopening the checkout changes nothing
-  const replay = await c.postForm(new URL(start.location).pathname, { action: 'success' });
+  const replay = await c.postForm(new URL(start.location, 'http://localhost').pathname, { action: 'success' });
   assert.equal(replay.status, 303);
   assert.equal((await c.get(start.location)).status, 302);
   assert.equal((await c.get(`/pay/order/${order.public_token}`)).status, 302);

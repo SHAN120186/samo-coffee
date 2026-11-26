@@ -11,6 +11,7 @@
 // /pay/payme and /pay/click/* are excluded from CSRF and cookies in app.js; they authenticate every
 // request themselves and always answer in the provider's own format with HTTP 200.
 import { Router } from 'express';
+import { config } from '../config.js';
 import { AppError } from '../lib/errors.js';
 import { rateLimit } from '../lib/ratelimit.js';
 import * as orders from '../services/orders.js';
@@ -21,6 +22,14 @@ import { paymentLog } from './log.js';
 import { MOCK_TX_PATTERN, mockEnabled } from './providers/mock.js';
 import * as payme from './providers/payme.js';
 import * as click from './providers/click.js';
+
+/**
+ * Our own pages (e.g. the demo checkout /pay/mock/…) are redirected to by path, so the browser stays on
+ * the address it is actually using even when BASE_URL is missing or wrong. External providers keep their URL.
+ */
+function sameSitePath(url) {
+  return url.startsWith(`${config.baseUrl}/`) ? url.slice(config.baseUrl.length) : url;
+}
 
 const router = Router();
 const view = (name) => `payments/views/${name}`;
@@ -49,21 +58,21 @@ router.get('/order/:token', entryLimiter, async (req, res, next) => {
     if (!order) return next();
     noStore(res);
     const returnUrl = safeReturnUrl(req.query.return, order);
-    if (!order.can_pay || LINK_PREVIEW_UA.test(req.get('user-agent') || '')) return res.redirect(returnUrl);
+    if (!order.can_pay || LINK_PREVIEW_UA.test(req.get('user-agent') || '')) return res.redirect(sameSitePath(returnUrl));
     let result;
     try {
       result = await startPayment(order, { returnUrl, channel: order.channel });
     } catch (err) {
       if (err instanceof AppError) {
-        if (err.code === 'already_paid' || err.code === 'order_closed') return res.redirect(returnUrl);
+        if (err.code === 'already_paid' || err.code === 'order_closed') return res.redirect(sameSitePath(returnUrl));
         throw err;
       }
       // the provider is unreachable or refused the request (details are in the payment log)
       throw new AppError('payment_unavailable', 'Не удалось начать оплату. Попробуйте ещё раз через минуту или свяжитесь с нами.', 503);
     }
-    if (result.redirectUrl) return res.redirect(result.redirectUrl);
+    if (result.redirectUrl) return res.redirect(sameSitePath(result.redirectUrl));
     if (result.invoiceLink) return res.redirect(`/pay/invoice/${order.public_token}`);
-    return res.redirect(returnUrl);
+    return res.redirect(sameSitePath(returnUrl));
   } catch (err) {
     return next(err);
   }
@@ -84,9 +93,9 @@ router.get('/return/:token', returnLimiter, (req, res, next) => {
     // Nothing from the query string is used: providers (and anybody else) can append whatever they like.
     const attempts = paymentsRepo.listByOrder(order.id);
     const returnUrl = storedReturnUrl(order, attempts);
-    if (order.is_paid || !order.can_pay || !hasInFlightTransaction(attempts)) return res.redirect(303, returnUrl);
+    if (order.is_paid || !order.can_pay || !hasInFlightTransaction(attempts)) return res.redirect(303, sameSitePath(returnUrl));
     // The customer came back before the provider's final callback: wait for it here.
-    return res.render(view('pending'), { order, returnUrl, title: `Проверяем оплату заказа ${order.number}` });
+    return res.render(view('pending'), { order, returnUrl: sameSitePath(returnUrl), title: `Проверяем оплату заказа ${order.number}` });
   } catch (err) {
     return next(err);
   }
@@ -119,11 +128,11 @@ router.get('/invoice/:token', invoiceLimiter, (req, res, next) => {
     noStore(res);
     const attempts = paymentsRepo.listByOrder(order.id);
     const returnUrl = storedReturnUrl(order, attempts);
-    if (!order.can_pay) return res.redirect(303, returnUrl);
+    if (!order.can_pay) return res.redirect(303, sameSitePath(returnUrl));
     const attempt = attempts.find((p) => p.provider === 'telegram' && p.status === 'pending' && !p.provider_tx_id);
     const invoiceLink = attempt?.amount === order.total && /^https:\/\/t\.me\/[^\s"'<>]+$/.test(attempt.raw?.invoiceLink || '') ? attempt.raw.invoiceLink : null;
-    if (!invoiceLink) return res.redirect(303, orderStatusUrl(order));
-    return res.render(view('telegram-invoice'), { order, invoiceLink, returnUrl, title: `Оплата заказа ${order.number} в Telegram` });
+    if (!invoiceLink) return res.redirect(303, sameSitePath(orderStatusUrl(order)));
+    return res.render(view('telegram-invoice'), { order, invoiceLink, returnUrl: sameSitePath(returnUrl), title: `Оплата заказа ${order.number} в Telegram` });
   } catch (err) {
     return next(err);
   }
@@ -146,8 +155,8 @@ router.get('/mock/:tx', mockLimiter, (req, res, next) => {
   const ctx = loadMockPayment(req);
   if (!ctx) return next();
   noStore(res);
-  if (!mockUsable(ctx)) return res.redirect(ctx.returnUrl);
-  return res.render(view('mock-checkout'), { order: ctx.order, payment: ctx.payment, returnUrl: ctx.returnUrl, title: `Оплата заказа ${ctx.order.number}` });
+  if (!mockUsable(ctx)) return res.redirect(sameSitePath(ctx.returnUrl));
+  return res.render(view('mock-checkout'), { order: ctx.order, payment: ctx.payment, returnUrl: sameSitePath(ctx.returnUrl), title: `Оплата заказа ${ctx.order.number}` });
 });
 
 router.post('/mock/:tx', mockLimiter, (req, res, next) => {
@@ -170,7 +179,7 @@ router.post('/mock/:tx', mockLimiter, (req, res, next) => {
       // action === 'cancel' → nothing changes, the customer just goes back
     }
     paymentLog('mock.result', { order: order.id, number: order.number, tx: payment.provider_tx_id, action, changed });
-    return res.redirect(303, returnUrl || orderStatusUrl(order));
+    return res.redirect(303, sameSitePath(returnUrl || orderStatusUrl(order)));
   } catch (err) {
     return next(err);
   }

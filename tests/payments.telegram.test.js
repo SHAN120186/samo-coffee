@@ -136,7 +136,7 @@ test('site: /pay/order → "pay in Telegram" page → successful_payment → the
   assert.deepEqual([done.paid, done.status, done.can_pay], [true, 'paid', false]);
   const after = await c.get(`/pay/invoice/${order.public_token}`);
   assert.equal(after.status, 303);
-  assert.equal(new URL(after.location).pathname, `/order/${order.public_token}`);
+  assert.equal(new URL(after.location, 'http://localhost').pathname, `/order/${order.public_token}`);
   assert.equal((await c.get(`/pay/order/${order.public_token}`)).status, 302, 'a paid order is not sent to pay again');
 
   // exactly one paid row (the Telegram charge); the invoice attempt is closed
