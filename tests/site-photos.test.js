@@ -68,3 +68,16 @@ test('migration 003 switches the shipped illustrations to photos but keeps image
   assert.equal(get("SELECT image FROM plans WHERE slug = 'duo'").image, '/img/photos/plan-duo.jpg');
   assert.equal(get("SELECT COUNT(*) AS n FROM posts WHERE cover = '/img/photos/blog-cold-brew.jpg'").n, 1);
 });
+
+test('demo bot users are flagged, so broadcasts and reminders never write to made-up ids', () => {
+  const total = get('SELECT COUNT(*) AS n FROM tg_users').n;
+  assert.ok(total > 0);
+  assert.equal(get('SELECT COUNT(*) AS n FROM tg_users WHERE is_demo = 1').n, total, 'the seed marks every user it invents');
+  // an older stand seeded without the flag: migration 004 marks users older than the first admin, not later ones
+  run('UPDATE tg_users SET is_demo = 0');
+  run("UPDATE admins SET created_at = '2030-01-01T00:00:00.000Z'");
+  run("INSERT INTO tg_users (id, chat_id, first_name, source, created_at, last_seen_at) VALUES (424242, 424242, 'Real', 'bot', '2030-02-01T00:00:00.000Z', '2030-02-01T00:00:00.000Z')");
+  db.exec(fs.readFileSync(path.join(ROOT, 'src/db/migrations/004_mark_demo_tg_users.sql'), 'utf8'));
+  assert.equal(get('SELECT is_demo FROM tg_users WHERE id = 424242').is_demo, 0, 'a real user who came later stays reachable');
+  assert.equal(get('SELECT COUNT(*) AS n FROM tg_users WHERE is_demo = 1').n, total, 'all seeded users are flagged');
+});

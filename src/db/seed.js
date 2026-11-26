@@ -214,7 +214,8 @@ export function seed({ quiet = false, wipe = true } = {}) {
   };
 
   // ───────────── telegram users (bot + mini app)
-  const insTgUser = db.prepare(`INSERT INTO tg_users (id, chat_id, username, first_name, last_name, language_code, start_param, source, is_blocked, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, 'ru', ?, ?, ?, ?, ?)`);
+  // is_demo = 1: the ids are made up, so broadcasts, reminders and notifications never write to them
+  const insTgUser = db.prepare(`INSERT INTO tg_users (id, chat_id, username, first_name, last_name, language_code, start_param, source, is_blocked, is_demo, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?, 'ru', ?, ?, ?, 1, ?, ?)`);
   const tgUsers = [];
   const subscribers = []; // subscription orders to turn into subscriptions
 
